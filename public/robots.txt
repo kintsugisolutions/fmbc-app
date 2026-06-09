@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Legal pages — indexable but low-priority (noindex is set in metadata)
+# Sitemap
+Sitemap: https://findmybottle.club/sitemap.xml

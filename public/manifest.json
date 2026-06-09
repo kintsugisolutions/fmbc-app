@@ -1,0 +1,27 @@
+{
+  "name": "Find My Bottle Club",
+  "short_name": "FMBC",
+  "description": "Search for a specific bottle. We check availability across verified stores in Ludhiana and WhatsApp you when confirmed.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1D1F23",
+  "theme_color": "#1D1F23",
+  "orientation": "portrait",
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "/fmbc_icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/fmbc_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "utilities"],
+  "screenshots": []
+}
