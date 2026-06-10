@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Cormorant_Garamond } from 'next/font/google'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import AgeGate from '@/components/AgeGate'
 import DepthField from '@/components/DepthField'
 import IosInstallPrompt from '@/components/IosInstallPrompt'
@@ -109,6 +110,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* iOS Safari "Add to Home Screen" prompt — shows once, after age verification */}
         <IosInstallPrompt />
+
+        {/* Vercel Speed Insights — tracks Core Web Vitals and performance metrics */}
+        <SpeedInsights />
 
         {/* JSON-LD structured data */}
         <script
