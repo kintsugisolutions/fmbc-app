@@ -26,6 +26,7 @@ if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) 
 // Server-side area whitelist — must mirror AREAS in components/SearchForm.tsx.
 // Prevents arbitrary strings being forwarded into the n8n → WhatsApp pipeline.
 const ALLOWED_AREAS = [
+  'Anywhere in Ludhiana',
   'Model Town', 'BRS Nagar', 'Civil Lines', 'Sarabha Nagar',
   'Dugri', 'Pakhowal Road', 'Ferozepur Road', 'Gurdev Nagar',
   'Haibowal', 'Raikot Road', 'Other',

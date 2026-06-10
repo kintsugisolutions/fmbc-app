@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const AREAS = [
@@ -11,6 +11,7 @@ const AREAS = [
 
 type Status = 'idle' | 'loading' | 'success' | 'error'
 type Props = { mode?: 'buy' | 'drink' }
+type Suggestion = { name: string; category: string }
 
 function SuccessOverlay({ product, area, mode, onClose }: {
   product: string; area: string; mode: 'buy'|'drink'; onClose: () => void
@@ -55,6 +56,12 @@ export default function SearchForm({ mode = 'buy' }: Props) {
   const [status, setStatus]   = useState<Status>('idle')
   const [error, setError]     = useState('')
 
+  const [suggestions, setSuggestions]   = useState<Suggestion[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeIndex, setActiveIndex]   = useState(-1)
+  const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapRef      = useRef<HTMLDivElement>(null)
+
   const productValid = product.trim().length >= 2
   const areaValid    = area !== ''
   const phoneValid   = /^[6-9]\d{9}$/.test(phone.trim())
@@ -63,6 +70,60 @@ export default function SearchForm({ mode = 'buy' }: Props) {
     const q = searchParams.get('q')
     if (q) setProduct(q)
   }, [searchParams])
+
+  const fetchSuggestions = useCallback((query: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (query.trim().length < 2) { setSuggestions([]); setShowSuggestions(false); return }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/products?q=${encodeURIComponent(query.trim())}`)
+        if (!res.ok) return
+        const data: Suggestion[] = await res.json()
+        setSuggestions(data)
+        setShowSuggestions(data.length > 0)
+        setActiveIndex(-1)
+      } catch { /* silent */ }
+    }, 200)
+  }, [])
+
+  function handleProductChange(val: string) {
+    setProduct(val)
+    fetchSuggestions(val)
+  }
+
+  function pickSuggestion(name: string) {
+    setProduct(name)
+    setSuggestions([])
+    setShowSuggestions(false)
+    setActiveIndex(-1)
+  }
+
+  function handleProductKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!showSuggestions) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex(i => Math.min(i + 1, suggestions.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex(i => Math.max(i - 1, -1))
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault()
+      pickSuggestion(suggestions[activeIndex].name)
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false)
+    }
+  }
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -99,16 +160,37 @@ export default function SearchForm({ mode = 'buy' }: Props) {
       )}
 
       <form className="form-wrap" onSubmit={handleSubmit}>
-        <div className={`field${productValid ? ' field--valid' : ''}`}>
+        <div className={`field${productValid ? ' field--valid' : ''}`} ref={wrapRef}>
           <label>What are you looking for?</label>
           <input
             type="text" value={product} required maxLength={200}
-            onChange={e => setProduct(e.target.value)}
+            onChange={e => handleProductChange(e.target.value)}
+            onKeyDown={handleProductKeyDown}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true) }}
             placeholder={placeholder}
             autoComplete="off"
             enterKeyHint="search"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={showSuggestions}
           />
           {productValid && <span className="field-tick">✓</span>}
+          {showSuggestions && (
+            <ul className="autocomplete-list" role="listbox">
+              {suggestions.map((s, i) => (
+                <li
+                  key={s.name}
+                  role="option"
+                  aria-selected={i === activeIndex}
+                  className={`autocomplete-item${i === activeIndex ? ' autocomplete-item--active' : ''}`}
+                  onMouseDown={e => { e.preventDefault(); pickSuggestion(s.name) }}
+                >
+                  <span className="autocomplete-name">{s.name}</span>
+                  <span className="autocomplete-cat mono">{s.category}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className={`field${areaValid ? ' field--valid' : ''}`}>
