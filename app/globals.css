@@ -3,10 +3,12 @@
   --ink: #1D1F23; --ink2: #252729; --gold: #D2A74F;
   --gold-d: #A07830; --gold-l: #E8C878;
   --ivory: #FAF6EE; --muted: #9A9080; --dim: #4A4438; --bdr: #2E2C28;
+  --card: #252729; /* used by skeleton shimmer */
 }
 html { scroll-behavior: smooth; }
 body { background: var(--ink); color: var(--ivory); font-family: Georgia,serif; -webkit-font-smoothing: antialiased; }
-h1,h2,h3 { font-weight: normal; letter-spacing: -0.02em; }
+/* Display type — Cormorant Garamond via next/font (--font-display), Georgia fallback */
+h1,h2,h3 { font-family: var(--font-display, Georgia, serif); font-weight: 500; letter-spacing: -0.01em; }
 p { line-height: 1.7; }
 a { color: var(--gold); text-decoration: none; }
 .mono { font-family: 'Courier New',Courier,monospace; }
@@ -18,8 +20,8 @@ a { color: var(--gold); text-decoration: none; }
 .nav-badge { font-family:'Courier New',monospace; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:3px 8px; }
 .hero { padding:80px 24px 60px; text-align:center; border-bottom:1px solid var(--bdr); }
 .hero-eyebrow { font-family:'Courier New',monospace; font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:20px; }
-.hero-title { font-size:clamp(32px,6vw,54px); color:var(--ivory); line-height:1.15; margin-bottom:20px; }
-.hero-title span { color:var(--gold); }
+.hero-title { font-size:clamp(36px,6.5vw,60px); color:var(--ivory); line-height:1.12; margin-bottom:20px; }
+.hero-title span { color:var(--gold); font-style:italic; }
 .hero-sub { font-size:16px; color:var(--muted); max-width:420px; margin:0 auto 40px; line-height:1.65; }
 .mode-wrap { display:flex; gap:8px; justify-content:center; margin-bottom:32px; }
 .mode-btn { padding:10px 22px; border-radius:6px; border:1px solid var(--bdr); background:transparent; color:var(--muted); font-family:'Courier New',monospace; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:all 0.18s; }
@@ -165,6 +167,7 @@ nav, main, footer { position:relative; z-index:1; }
 .field--valid input, .field--valid select { border-color:rgba(80,190,120,0.6); }
 .field-tick { position:absolute; right:12px; top:36px; color:#50BE78; font-size:13px; pointer-events:none; }
 .field-tick--phone { right:12px; top:36px; }
+.field-tick--select { right:40px; }
 .form-footnote { font-family:'Courier New',monospace; font-size:9px; letter-spacing:0.5px; color:var(--dim); text-align:center; margin-top:16px; line-height:1.65; }
 
 /* ── Phone prefix gap for WA icon ─────────────────────────────────────────── */
@@ -264,24 +267,19 @@ nav, main, footer { position:relative; z-index:1; }
 .hero::after { content:''; position:absolute; top:30%; left:50%; transform:translate(-50%,-50%); width:700px; height:500px; background:radial-gradient(ellipse at center, rgba(210,167,79,0.055) 0%, transparent 68%); pointer-events:none; z-index:0; }
 .hero > * { position:relative; z-index:1; }
 
-/* ── Search counter ───────────────────────────────────────────────────────── */
-.search-counter { display:inline-flex; align-items:center; gap:7px; margin-bottom:20px; }
-.counter-dot { width:6px; height:6px; border-radius:50%; background:#50BE78; flex-shrink:0; animation:pulse-ring 2.5s ease-in-out infinite; }
-.counter-text { font-family:'Courier New',monospace; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:#50BE78; }
-
 /* ── Live search ticker ───────────────────────────────────────────────────── */
 @keyframes ticker-scroll {
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
-.ticker-wrap { width:100%; overflow:hidden; margin-bottom:28px; padding:10px 0; border-top:1px solid var(--bdr); border-bottom:1px solid var(--bdr); }
+.ticker-block { margin-bottom:28px; }
+.ticker-label { font-family:'Courier New',monospace; font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); text-align:center; margin-bottom:8px; }
+.ticker-wrap { width:100%; overflow:hidden; padding:10px 0; border-top:1px solid var(--bdr); border-bottom:1px solid var(--bdr); mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent); -webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent); }
 .ticker-track { display:flex; width:max-content; animation:ticker-scroll 32s linear infinite; }
 .ticker-track:hover { animation-play-state:paused; }
 .ticker-item { display:inline-flex; align-items:center; gap:8px; padding:0 4px; white-space:nowrap; }
 .ticker-sku { font-size:10px; color:var(--ivory); }
 .ticker-sep { font-size:10px; color:var(--dim); }
-.ticker-area { font-size:10px; color:var(--muted); }
-.ticker-time { font-size:9px; color:var(--dim); }
 .ticker-divider { font-size:10px; color:var(--gold); margin:0 16px; }
 
 /* ── Form section wrapper ─────────────────────────────────────────────────── */
@@ -369,11 +367,180 @@ nav, main, footer { position:relative; z-index:1; }
   to { transform: rotate(360deg); }
 }
 
-/* Page entry animations — only play if user has no motion preference */
+/* ── Page entry / gate-reveal animations ──────────────────────────────────────
+   Hero elements stagger in. While the age gate is open (html[data-gate-open],
+   set pre-paint in layout.tsx), these animations are held paused at 0%; the
+   moment the gate clears the attribute is removed and the sequence plays —
+   one cohesive reveal instead of a hard cut. Verified visitors (no attribute)
+   get the same sequence on normal page load. */
 @media (prefers-reduced-motion: no-preference) {
-  .hero { animation: fadeUp 0.55s ease both; }
-  .form-wrap { animation: fadeUp 0.65s 0.1s ease both; }
-  .how-section { animation: fadeIn 0.6s 0.2s ease both; }
+  .hero          { animation: fadeUp 0.55s ease both; }
+  .hero-eyebrow  { animation: fadeUp 0.5s 0.05s ease both; }
+  .launch-strip  { animation: fadeUp 0.5s 0.14s ease both; }
+  .hero-title    { animation: fadeUp 0.65s 0.24s ease both; }
+  .areas-strip   { animation: fadeUp 0.5s 0.36s ease both; }
+  .hero-sub--dynamic { animation: fadeUp 0.5s 0.44s ease both; }
+  .ticker-block  { animation: fadeIn 0.6s 0.56s ease both; }
+  .form-section  { animation: fadeUp 0.6s 0.62s ease both; }
+  .how-section   { animation: fadeIn 0.6s 0.2s ease both; }
+
+  html[data-gate-open] .hero,
+  html[data-gate-open] .hero-eyebrow,
+  html[data-gate-open] .launch-strip,
+  html[data-gate-open] .hero-title,
+  html[data-gate-open] .areas-strip,
+  html[data-gate-open] .hero-sub--dynamic,
+  html[data-gate-open] .ticker-block,
+  html[data-gate-open] .form-section,
+  html[data-gate-open] .how-section { animation-play-state: paused; }
+}
+
+/* ── Age gate reveal transition ──────────────────────────────────────────────
+   Returning verified visitors: overlay hidden before paint (pre-paint script).
+   The :not(--exit) guard keeps the exit animation visible while the verified
+   attribute is being set mid-transition. */
+html[data-fmbc-verified] .age-gate-overlay:not(.age-gate-overlay--exit) { display:none; }
+
+.age-gate-glow { position:absolute; inset:0; opacity:0; pointer-events:none; background:radial-gradient(ellipse 70% 60% at 50% 50%, rgba(210,167,79,0.16) 0%, transparent 65%); }
+
+.age-gate-overlay--exit { pointer-events:none; animation:gateOverlayExit 0.8s ease forwards; }
+.age-gate-overlay--exit .age-gate-box { animation:gateBoxExit 0.5s ease forwards; }
+.age-gate-overlay--exit .age-gate-glow { animation:gateGlow 0.8s ease forwards; }
+
+@keyframes gateOverlayExit {
+  0%   { opacity:1; }
+  30%  { opacity:1; }
+  100% { opacity:0; }
+}
+@keyframes gateBoxExit {
+  to { opacity:0; transform:translateY(-16px) scale(1.03); }
+}
+@keyframes gateGlow {
+  0%   { opacity:0; }
+  35%  { opacity:1; }
+  100% { opacity:0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .age-gate-box { animation: fadeUp 0.5s ease both; }
+}
+
+/* ── Depth field (layered 3D background) ─────────────────────────────────────
+   Three fixed planes drifting at different speeds + scroll parallax from
+   DepthField.tsx. Pure CSS gradients — no canvas, no WebGL, no payload. */
+.depth-field { position:fixed; inset:-12% 0; z-index:0; pointer-events:none; overflow:hidden; }
+.depth-layer { position:absolute; inset:0; will-change:transform; }
+.depth-layer--far {
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(210,167,79,0.075), transparent 62%),
+    radial-gradient(ellipse 70% 50% at 88% 112%, rgba(160,120,48,0.055), transparent 65%),
+    radial-gradient(ellipse 50% 40% at 8% 70%, rgba(210,167,79,0.04), transparent 70%);
+}
+.depth-layer--mid {
+  background-image:
+    radial-gradient(1.4px 1.4px at 25px 35px, rgba(210,167,79,0.4), transparent),
+    radial-gradient(1px 1px at 92px 110px, rgba(232,200,120,0.3), transparent),
+    radial-gradient(1.2px 1.2px at 150px 60px, rgba(210,167,79,0.22), transparent),
+    radial-gradient(0.8px 0.8px at 60px 155px, rgba(232,200,120,0.25), transparent);
+  background-size:190px 190px;
+}
+.depth-layer--near {
+  background-image:
+    radial-gradient(2.4px 2.4px at 70px 130px, rgba(232,200,120,0.26), transparent),
+    radial-gradient(2px 2px at 230px 50px, rgba(210,167,79,0.2), transparent),
+    radial-gradient(1.8px 1.8px at 150px 260px, rgba(210,167,79,0.16), transparent);
+  background-size:340px 340px;
+  filter:blur(0.4px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .depth-layer--mid  { animation: depth-drift-mid 80s linear infinite; }
+  .depth-layer--near { animation: depth-drift-near 110s linear infinite; }
+}
+@keyframes depth-drift-mid  { to { background-position: 190px 380px; } }
+@keyframes depth-drift-near { to { background-position: -340px 680px; } }
+
+/* ── iOS "Add to Home Screen" prompt ─────────────────────────────────────── */
+.ios-prompt {
+  position:fixed; left:12px; right:12px;
+  bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index:8000;
+  max-width:420px; margin:0 auto;
+  background:var(--ink2);
+  border:1px solid rgba(210,167,79,0.35);
+  border-radius:14px;
+  padding:18px 44px 16px 18px;
+  box-shadow:0 16px 48px rgba(0,0,0,0.55);
+  animation:slide-up-soft 0.45s ease both;
+}
+@keyframes slide-up-soft { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:none; } }
+.ios-prompt-close { position:absolute; top:6px; right:8px; background:none; border:none; color:var(--muted); font-size:20px; line-height:1; cursor:pointer; padding:6px 10px; }
+.ios-prompt-eyebrow { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:4px; }
+.ios-prompt-title { font-family:var(--font-display, Georgia, serif); font-size:17px; color:var(--ivory); margin-bottom:6px; }
+.ios-prompt-steps { font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:12px; }
+.ios-prompt-steps strong { color:var(--ivory); }
+.ios-share-icon { display:inline-block; vertical-align:-3px; color:var(--gold); }
+.ios-prompt-dismiss { width:100%; padding:10px; background:transparent; border:1px solid var(--bdr); border-radius:6px; color:var(--muted); font-size:10px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:border-color 0.18s,color 0.18s; }
+.ios-prompt-dismiss:hover { border-color:var(--gold); color:var(--gold); }
+
+/* ── Skeleton loading ────────────────────────────────────────────────────── */
+.skeleton-pulse {
+  background: linear-gradient(
+    90deg,
+    var(--card) 25%,
+    rgba(255,255,255,0.06) 50%,
+    var(--card) 75%
+  );
+  background-size: 200% 100%;
+  border-radius: 3px;
+}
+.skeleton-text  { height: 13px; }
+.skeleton-icon  { width: 16px; height: 16px; border-radius: 2px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-pulse { animation: skeleton-shimmer 1.4s ease infinite; }
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position:  200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Live search counter ─────────────────────────────────────────────────── */
+.search-counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin: 12px 0 4px;
+}
+.counter-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #4CAF50;
+  box-shadow: 0 0 0 0 rgba(76,175,80,0.6);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .counter-dot { animation: pulse-dot 2s ease-in-out infinite; }
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(76,175,80,0.6); }
+  50%       { box-shadow: 0 0 0 5px rgba(76,175,80,0); }
+}
+
+/* ── Nav right side (store count + badge) ────────────────────────────────── */
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nav-store-count {
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  color: var(--gold);
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
 /* Submit button loading state */
@@ -402,6 +569,7 @@ nav, main, footer { position:relative; z-index:1; }
   .nav { padding:14px 16px; gap:8px; }
   .nav-brand { letter-spacing:1.5px; white-space:nowrap; }
   .nav-badge { letter-spacing:0.5px; white-space:nowrap; font-size:8px; padding:3px 6px; }
+  .nav-store-count { display:none; }
 
   /* Hero — reduce excessive top padding */
   .hero { padding:48px 20px 40px; }
@@ -453,4 +621,27 @@ nav, main, footer { position:relative; z-index:1; }
   .faq-section { padding:44px 20px; }
   .faq-q { font-size:14px; padding:14px 16px; }
   .faq-a { padding:0 16px 16px; font-size:13px; }
+
+  /* Areas strip — label stacked above swipeable pill row on mobile */
+  .areas-strip {
+    flex-direction:column; flex-wrap:nowrap; align-items:center;
+    gap:6px; overflow-x:visible;
+  }
+  .areas-label { margin-bottom:0; }
+  .areas-pills {
+    flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; padding-bottom:4px; width:100%;
+    justify-content:flex-start;
+    mask-image:linear-gradient(90deg,#000 86%,transparent);
+    -webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);
+  }
+  .areas-pills::-webkit-scrollbar { display:none; }
+  .area-pill { flex-shrink:0; }
+
+  /* Success overlay — comfortable padding within safe areas */
+  .success-overlay { padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px)); }
+  .success-card { padding:32px 22px; }
+
+  /* Ticker — slightly faster loop on narrow screens so it doesn't feel stalled */
+  .ticker-track { animation-duration:24s; }
 }

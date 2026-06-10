@@ -1,4 +1,6 @@
 import Image from 'next/image'
+import { Suspense } from 'react'
+import StoreCount from './StoreCount'
 
 export default function Nav() {
   return (
@@ -14,7 +16,13 @@ export default function Nav() {
         />
         <span className="nav-brand">Find My Bottle Club</span>
       </div>
-      <span className="nav-badge mono">Ludhiana · Members Only</span>
+      <div className="nav-right">
+        {/* Only renders once stores are added to the DB — invisible until then */}
+        <Suspense fallback={null}>
+          <StoreCount />
+        </Suspense>
+        <span className="nav-badge mono">Ludhiana · Members Only</span>
+      </div>
     </nav>
   )
 }

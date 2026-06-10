@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const AREAS = [
+  'Anywhere in Ludhiana',
   'Model Town','BRS Nagar','Civil Lines','Sarabha Nagar',
   'Dugri','Pakhowal Road','Ferozepur Road','Gurdev Nagar',
   'Haibowal','Raikot Road','Other'
@@ -116,7 +117,7 @@ export default function SearchForm({ mode = 'buy' }: Props) {
             <option value="" disabled>Select area</option>
             {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
-          {areaValid && <span className="field-tick">✓</span>}
+          {areaValid && <span className="field-tick field-tick--select">✓</span>}
         </div>
 
         <div className={`field${phoneValid ? ' field--valid' : ''}`}>
@@ -165,8 +166,9 @@ export default function SearchForm({ mode = 'buy' }: Props) {
             : mode === 'buy' ? 'Search Stores' : 'Search Venues'}
         </button>
 
-        {/* Response time badge */}
-        <p className="response-badge mono">⚡ Avg. reply in ~47 min</p>
+        {/* Response time badge — keep this a target, not a fabricated average,
+            until real reply-time data exists to back a specific number */}
+        <p className="response-badge mono">⚡ Typically replies within the hour</p>
 
         {status === 'error' && (
           <p className="form-error" role="alert" aria-live="polite" style={{marginTop:'12px',textAlign:'center'}}>

@@ -1,43 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase'
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
 
-// ─── Rate limiter ─────────────────────────────────────────────────────────────
-// PRODUCTION NOTE: The in-memory Map below works correctly in local dev and
-// single-instance deployments. On Vercel serverless, each cold-start gets its
-// own memory — the Map resets, making this limit ineffective.
-//
-// TO FIX FOR PRODUCTION (one-time setup, free tier is enough):
-//   1. Create a free Upstash Redis account at https://upstash.com
-//   2. npm install @upstash/ratelimit @upstash/redis
-//   3. Add these two env vars to .env.local AND Vercel:
-//        UPSTASH_REDIS_REST_URL=...
-//        UPSTASH_REDIS_REST_TOKEN=...
-//   4. Replace the checkRateLimit function and its call below with:
-//
-//   import { Ratelimit } from '@upstash/ratelimit'
-//   import { Redis } from '@upstash/redis'
-//   const ratelimit = new Ratelimit({
-//     redis: Redis.fromEnv(),
-//     limiter: Ratelimit.slidingWindow(5, '10 m'),
-//   })
-//   // Then in the handler:
-//   const { success } = await ratelimit.limit(ip)
-//   if (!success) return NextResponse.json({ error: 'Too many requests...' }, { status: 429 })
-//
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
-const RATE_LIMIT   = 5
-const WINDOW_MS    = 10 * 60 * 1000 // 10 minutes
-
-function checkRateLimit(ip: string): boolean {
-  const now   = Date.now()
-  const entry = rateLimitMap.get(ip)
-  if (!entry || entry.resetAt < now) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + WINDOW_MS })
-    return true
-  }
-  if (entry.count >= RATE_LIMIT) return false
-  entry.count++
-  return true
+// ─── Rate limiter (Upstash Redis — persistent across Vercel cold starts) ──────
+// Sliding window: 5 requests per IP per 10 minutes.
+// Requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN env vars.
+// Lazy init with a guard: if the env vars are missing, the route logs loudly and
+// continues WITHOUT rate limiting instead of hard-crashing every request with a 500.
+// Set the env vars in Vercel before launch — this fallback is a safety net, not a mode.
+let ratelimit: Ratelimit | null = null
+if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+  ratelimit = new Ratelimit({
+    redis: Redis.fromEnv(),
+    limiter: Ratelimit.slidingWindow(5, '10 m'),
+    analytics: false,
+  })
+} else {
+  console.error(
+    '⚠️ RATE LIMITING DISABLED: UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN not set. ' +
+    'Do not go live without these.'
+  )
 }
+
+// Server-side area whitelist — must mirror AREAS in components/SearchForm.tsx.
+// Prevents arbitrary strings being forwarded into the n8n → WhatsApp pipeline.
+const ALLOWED_AREAS = [
+  'Model Town', 'BRS Nagar', 'Civil Lines', 'Sarabha Nagar',
+  'Dugri', 'Pakhowal Road', 'Ferozepur Road', 'Gurdev Nagar',
+  'Haibowal', 'Raikot Road', 'Other',
+]
 
 // Strip HTML tags from any string field before forwarding to n8n
 function sanitise(s: string): string {
@@ -65,12 +57,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Rate limit by IP ────────────────────────────────────────────────────
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '0.0.0.0'
-    if (!checkRateLimit(ip)) {
-      return NextResponse.json(
-        { error: 'Too many requests. Please wait a few minutes and try again.' },
-        { status: 429 }
-      )
+    if (ratelimit) {
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '0.0.0.0'
+      const { success } = await ratelimit.limit(ip)
+      if (!success) {
+        return NextResponse.json(
+          { error: 'Too many requests. Please wait a few minutes and try again.' },
+          { status: 429 }
+        )
+      }
     }
 
     const body = await req.json()
@@ -94,6 +89,11 @@ export async function POST(req: NextRequest) {
     // searchType whitelist
     if (!['buy', 'drink'].includes(searchType)) {
       return NextResponse.json({ error: 'Invalid search type' }, { status: 400 })
+    }
+
+    // Area whitelist — reject anything not in the known Ludhiana area list
+    if (!ALLOWED_AREAS.includes(area)) {
+      return NextResponse.json({ error: 'Invalid area' }, { status: 400 })
     }
 
     const webhookUrl = process.env.N8N_WEBHOOK_URL
@@ -131,6 +131,15 @@ export async function POST(req: NextRequest) {
       console.error('n8n webhook error:', res.status)
       return NextResponse.json({ error: 'Search could not be processed' }, { status: 502 })
     }
+
+    // ── Increment search_count in Supabase (fire-and-forget) ─────────────────
+    // Non-blocking — a Supabase failure must never break the user-facing search.
+    createClient()
+      .rpc('increment_product_search_count', { product_name_input: sanitise(product) })
+      .then(
+        () => {},
+        (e: unknown) => console.warn('search_count increment failed:', e)
+      )
 
     return NextResponse.json({ success: true })
   } catch (err) {

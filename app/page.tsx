@@ -3,6 +3,8 @@ import Image from 'next/image'
 import Nav from '@/components/Nav'
 import HeroContent from '@/components/HeroContent'
 import BrowseSection from '@/components/BrowseSection'
+import BrowseSkeleton from '@/components/BrowseSkeleton'
+import LiveSearchCounter from '@/components/LiveSearchCounter'
 import WASection from '@/components/WASection'
 import FAQSection from '@/components/FAQSection'
 import StickyBar from '@/components/StickyBar'
@@ -41,7 +43,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Dynamic: hero-sub + counter + ticker + form — requires client */}
+          {/* Live search counter — server component, hidden until total > 0 */}
+          <Suspense fallback={null}>
+            <LiveSearchCounter />
+          </Suspense>
+
+          {/* Dynamic: hero-sub + ticker + form — requires client */}
           <Suspense fallback={
             <div style={{maxWidth:'520px',margin:'0 auto',minHeight:'400px'}} />
           }>
@@ -50,7 +57,7 @@ export default function Home() {
         </section>
 
         {/* ── Browse ───────────────────────────────────────────────────── */}
-        <Suspense fallback={null}>
+        <Suspense fallback={<BrowseSkeleton />}>
           <BrowseSection />
         </Suspense>
 

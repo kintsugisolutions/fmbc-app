@@ -4,14 +4,18 @@
 // Restricts which scripts, styles, and connections the browser trusts.
 // 'unsafe-inline' on script/style is required while Next.js inlines runtime code.
 // Tighten to nonce-based CSP in v2 when you move to a custom server or Vercel edge middleware.
-// connect-src: self + Supabase + your n8n domain (update the n8n domain when known).
+// connect-src is a strict allowlist: self + Supabase only. The n8n webhook is
+// called server-side (never from the browser), so it does NOT belong here.
+// 'unsafe-eval' is required by Next.js dev tooling only — never shipped to prod.
+const isDev = process.env.NODE_ENV === 'development'
+
 const cspDirectives = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",   // Next.js requires unsafe-eval in dev; tighten for prod
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
-  "font-src 'self'",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https:",
+  "font-src 'self'",                                    // next/font self-hosts — no external font origins needed
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
   "frame-ancestors 'none'",                             // stronger than X-Frame-Options
   "base-uri 'self'",
   "form-action 'self'",

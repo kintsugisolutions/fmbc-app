@@ -1,6 +1,25 @@
 import type { Metadata, Viewport } from 'next'
+import { Cormorant_Garamond } from 'next/font/google'
 import AgeGate from '@/components/AgeGate'
+import DepthField from '@/components/DepthField'
+import IosInstallPrompt from '@/components/IosInstallPrompt'
 import './globals.css'
+
+// ── Display typeface — self-hosted via next/font (no external requests at runtime,
+// CSP stays clean; Google Fonts is only contacted once at build time) ──
+const cormorant = Cormorant_Garamond({
+  subsets: ['latin'],
+  weight: ['500', '600'],
+  style: ['normal', 'italic'],
+  variable: '--font-display',
+  display: 'swap',
+})
+
+// ── Pre-paint gate decision ──────────────────────────────────────────────────
+// Runs before anything renders: returning verified visitors skip the gate with zero
+// flash; everyone else gets `data-gate-open`, which holds the hero entrance animations
+// until the gate clears. Without JS, the server-rendered gate stays up (fail-closed).
+const gateScript = `(function(){try{if(sessionStorage.getItem('fmbc-age-verified')){document.documentElement.setAttribute('data-fmbc-verified','1')}else{document.documentElement.setAttribute('data-gate-open','1')}}catch(e){document.documentElement.setAttribute('data-gate-open','1')}})()`
 
 // ── SEO & Social Metadata ────────────────────────────────────────────────────
 export const metadata: Metadata = {
@@ -73,14 +92,23 @@ const jsonLd = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={cormorant.variable} suppressHydrationWarning>
       <body>
+        {/* Pre-paint gate decision — must be the first thing in the body */}
+        <script dangerouslySetInnerHTML={{ __html: gateScript }} />
+
         {/* Skip navigation — keyboard / screen reader users skip directly to search */}
         <a href="#search-anchor" className="sr-only">Skip to search</a>
+
+        {/* Layered depth background — fixed, behind all content */}
+        <DepthField />
 
         {/* Age gate renders on every page — blocks content until 25+ is confirmed */}
         <AgeGate />
         {children}
+
+        {/* iOS Safari "Add to Home Screen" prompt — shows once, after age verification */}
+        <IosInstallPrompt />
 
         {/* JSON-LD structured data */}
         <script

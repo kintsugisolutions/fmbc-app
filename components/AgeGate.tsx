@@ -4,8 +4,14 @@ import { useState, useEffect } from 'react'
 // Punjab Excise Act 1914 — minimum age for alcohol access is 25 years in Punjab.
 // DOB is collected solely to verify age; it is NEVER stored, logged, or transmitted.
 // Acceptance is stored in sessionStorage for in-session persistence only.
+//
+// Gate-first rendering: the overlay is part of the server HTML (default state 'gate'),
+// so unverified visitors never see a flash of content before hydration. A pre-paint
+// inline script in app/layout.tsx sets `data-fmbc-verified` on <html> for returning
+// visitors (CSS hides the overlay instantly) or `data-gate-open` otherwise (holds the
+// hero entrance animations until the gate clears).
 
-type State = 'hidden' | 'gate' | 'blocked'
+type State = 'gate' | 'exiting' | 'hidden' | 'blocked'
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -26,17 +32,17 @@ function calculateAge(day: number, month: number, year: number): number {
 }
 
 export default function AgeGate() {
-  const [state,    setState]    = useState<State>('hidden')
+  // 'gate' by default → overlay exists in SSR HTML → no content flash for new visitors
+  const [state,    setState]    = useState<State>('gate')
   const [day,      setDay]      = useState('')
   const [month,    setMonth]    = useState('')
   const [year,     setYear]     = useState('')
   const [dobError, setDobError] = useState('')
 
   useEffect(() => {
-    try {
-      if (!sessionStorage.getItem('fmbc-age-verified')) setState('gate')
-    } catch {
-      setState('gate') // sessionStorage blocked (private browsing edge case)
+    // The pre-paint script in layout.tsx already decided; just sync React state.
+    if (document.documentElement.hasAttribute('data-fmbc-verified')) {
+      setState('hidden')
     }
   }, [])
 
@@ -82,7 +88,27 @@ export default function AgeGate() {
     }
 
     try { sessionStorage.setItem('fmbc-age-verified', '1') } catch { /* ignore */ }
-    setState('hidden')
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const html = document.documentElement
+
+    function reveal() {
+      html.removeAttribute('data-gate-open')
+      html.setAttribute('data-fmbc-verified', '1')
+      // Lets other components (e.g. the iOS install prompt) react to verification
+      window.dispatchEvent(new CustomEvent('fmbc:verified'))
+    }
+
+    if (reduceMotion) {
+      reveal()
+      setState('hidden')
+      return
+    }
+
+    // Exit sequence: gate card lifts + overlay parts → hero staggers in beneath it
+    setState('exiting')
+    setTimeout(reveal, 280)                    // start hero entrance behind the fading overlay
+    setTimeout(() => setState('hidden'), 820)  // unmount after the exit animation completes
   }
 
   if (state === 'hidden') return null
@@ -103,7 +129,8 @@ export default function AgeGate() {
   }
 
   return (
-    <div className="age-gate-overlay">
+    <div className={`age-gate-overlay${state === 'exiting' ? ' age-gate-overlay--exit' : ''}`}>
+      <div className="age-gate-glow" aria-hidden="true" />
       <div className="age-gate-box">
         <p className="age-gate-eyebrow mono">Age Verification Required</p>
         <h2 className="age-gate-title">Enter your<br />date of birth</h2>
