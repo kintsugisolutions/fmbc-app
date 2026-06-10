@@ -3,22 +3,28 @@ import { createClient } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
-  if (q.length < 2) return NextResponse.json([])
 
-  // Reject suspiciously long or clearly invalid queries
+  // q=all → return the full list for client-side preload (called once on mount)
+  const fetchAll = q === 'all'
+
+  if (!fetchAll && q.length < 2) return NextResponse.json([])
   if (q.length > 100) return NextResponse.json([], { status: 400 })
 
   try {
-    const { data, error } = await createClient()
+    let query = createClient()
       .from('products')
       .select('name, category')
       .eq('is_available', true)
-      .ilike('name', `%${q}%`)
       .order('search_count', { ascending: false })
-      .limit(6)
 
+    if (!fetchAll) query = query.ilike('name', `%${q}%`).limit(6)
+
+    const { data, error } = await query
     if (error) throw error
-    return NextResponse.json(data ?? [])
+
+    return NextResponse.json(data ?? [], {
+      headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=60' },
+    })
   } catch {
     return NextResponse.json([], { status: 500 })
   }

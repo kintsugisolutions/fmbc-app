@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const AREAS = [
@@ -56,39 +56,39 @@ export default function SearchForm({ mode = 'buy' }: Props) {
   const [status, setStatus]   = useState<Status>('idle')
   const [error, setError]     = useState('')
 
+  const [allProducts, setAllProducts]   = useState<Suggestion[]>([])
   const [suggestions, setSuggestions]   = useState<Suggestion[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [activeIndex, setActiveIndex]   = useState(-1)
-  const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const wrapRef      = useRef<HTMLDivElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
 
   const productValid = product.trim().length >= 2
   const areaValid    = area !== ''
   const phoneValid   = /^[6-9]\d{9}$/.test(phone.trim())
+
+  // Preload the full product list once — 32 items, ~1 KB, instant client-side filtering thereafter
+  useEffect(() => {
+    fetch('/api/products?q=all')
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Suggestion[]) => setAllProducts(data))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const q = searchParams.get('q')
     if (q) setProduct(q)
   }, [searchParams])
 
-  const fetchSuggestions = useCallback((query: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (query.trim().length < 2) { setSuggestions([]); setShowSuggestions(false); return }
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/products?q=${encodeURIComponent(query.trim())}`)
-        if (!res.ok) return
-        const data: Suggestion[] = await res.json()
-        setSuggestions(data)
-        setShowSuggestions(data.length > 0)
-        setActiveIndex(-1)
-      } catch { /* silent */ }
-    }, 200)
-  }, [])
-
   function handleProductChange(val: string) {
     setProduct(val)
-    fetchSuggestions(val)
+    const q = val.trim().toLowerCase()
+    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
+    const matches = allProducts
+      .filter(p => p.name.toLowerCase().includes(q))
+      .slice(0, 6)
+    setSuggestions(matches)
+    setShowSuggestions(matches.length > 0)
+    setActiveIndex(-1)
   }
 
   function pickSuggestion(name: string) {
