@@ -34,8 +34,12 @@ export default function BrowseClient({ grouped, categories }: Props) {
         <span className="browse-toggle-icon">{open ? '−' : '+'}</span>
       </button>
 
-      {open && (
-        <div className="browse-body" id="browse-body">
+      <div
+        className={`browse-body-wrap${open ? ' browse-body-wrap--open' : ''}`}
+        id="browse-body"
+        aria-hidden={!open}
+      >
+        <div className="browse-body">
           {/* Category pills */}
           <div className="browse-cats" role="tablist" aria-label="Bottle categories">
             {categories.map(cat => (
@@ -53,20 +57,20 @@ export default function BrowseClient({ grouped, categories }: Props) {
 
           {/* Bottle list */}
           <div role="tabpanel" aria-label={`${activeCategory} bottles`}>
-          <ul className="browse-list">
-            {(grouped[activeCategory] ?? []).map(product => (
-              <li key={product.id}>
-                <button
-                  className="browse-item"
-                  onClick={() => handleBottleClick(product.name)}
-                  title={`Search for ${product.name}`}
-                >
-                  <span className="browse-item-name">{product.name}</span>
-                  <span className="browse-item-cta mono">Search →</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+            <ul className="browse-list">
+              {(grouped[activeCategory] ?? []).map(product => (
+                <li key={product.id}>
+                  <button
+                    className="browse-item"
+                    onClick={() => handleBottleClick(product.name)}
+                    title={`Search for ${product.name}`}
+                  >
+                    <span className="browse-item-name">{product.name}</span>
+                    <span className="browse-item-cta mono">Search →</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <p className="browse-hint mono">
@@ -74,7 +78,7 @@ export default function BrowseClient({ grouped, categories }: Props) {
             Availability is confirmed in real time — not guaranteed.
           </p>
         </div>
-      )}
+      </div>
     </section>
   )
 }

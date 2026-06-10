@@ -80,6 +80,8 @@ export default function Home() {
                 <p className="step-desc">Tell us what you are looking for and where you are in Ludhiana. Takes 20 seconds.</p>
               </div>
 
+              <div className="step-connector" aria-hidden="true" />
+
               <div className="step">
                 <p className="step-num mono">02</p>
                 <div className="step-icon">
@@ -91,6 +93,8 @@ export default function Home() {
                 <h3 className="step-title">We check</h3>
                 <p className="step-desc">We reach out to our verified store network in Ludhiana and confirm availability in real time.</p>
               </div>
+
+              <div className="step-connector" aria-hidden="true" />
 
               <div className="step">
                 <p className="step-num mono">03</p>

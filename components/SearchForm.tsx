@@ -160,7 +160,7 @@ export default function SearchForm({ mode = 'buy' }: Props) {
       )}
 
       <form className="form-wrap" onSubmit={handleSubmit}>
-        <div className={`field${productValid ? ' field--valid' : ''}`} ref={wrapRef}>
+        <div className={`field${productValid ? ' field--valid' : ''}${showSuggestions ? ' field--open' : ''}`} ref={wrapRef}>
           <label>What are you looking for?</label>
           <input
             type="text" value={product} required maxLength={200}
