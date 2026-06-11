@@ -35,7 +35,9 @@ const plexMono = IBM_Plex_Mono({
 // Runs before anything renders: returning verified visitors skip the gate with zero
 // flash; everyone else gets `data-gate-open`, which holds the hero entrance animations
 // until the gate clears. Without JS, the server-rendered gate stays up (fail-closed).
-const gateScript = `(function(){try{if(sessionStorage.getItem('fmbc-age-verified')){document.documentElement.setAttribute('data-fmbc-verified','1')}else{document.documentElement.setAttribute('data-gate-open','1')}}catch(e){document.documentElement.setAttribute('data-gate-open','1')}})()`
+// Verification is stored as a 30-day cookie (fmbc-age-verified=1) so returning
+// visitors within 30 days skip the gate even after closing the browser/tab.
+const gateScript = `(function(){try{if(document.cookie.split('; ').some(function(c){return c==='fmbc-age-verified=1'})){document.documentElement.setAttribute('data-fmbc-verified','1')}else{document.documentElement.setAttribute('data-gate-open','1')}}catch(e){document.documentElement.setAttribute('data-gate-open','1')}})()`
 
 // ── SEO & Social Metadata ────────────────────────────────────────────────────
 export const metadata: Metadata = {

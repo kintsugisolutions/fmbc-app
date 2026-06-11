@@ -3,13 +3,21 @@ import { useState, useEffect } from 'react'
 
 // Punjab Excise Act 1914 — minimum age for alcohol access is 25 years in Punjab.
 // DOB is collected solely to verify age; it is NEVER stored, logged, or transmitted.
-// Acceptance is stored in sessionStorage for in-session persistence only.
+// Acceptance is stored as a 30-day cookie (fmbc-age-verified=1) so returning visitors
+// skip the gate for 30 days, even across browser sessions/tabs.
 //
 // Gate-first rendering: the overlay is part of the server HTML (default state 'gate'),
 // so unverified visitors never see a flash of content before hydration. A pre-paint
 // inline script in app/layout.tsx sets `data-fmbc-verified` on <html> for returning
 // visitors (CSS hides the overlay instantly) or `data-gate-open` otherwise (holds the
 // hero entrance animations until the gate clears).
+
+const AGE_VERIFIED_COOKIE_MAX_AGE = 60 * 60 * 24 * 30 // 30 days, in seconds
+
+function setAgeVerifiedCookie() {
+  const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `fmbc-age-verified=1; max-age=${AGE_VERIFIED_COOKIE_MAX_AGE}; path=/; SameSite=Lax${secure}`
+}
 
 type State = 'gate' | 'exiting' | 'hidden' | 'blocked'
 
@@ -87,7 +95,7 @@ export default function AgeGate() {
       return
     }
 
-    try { sessionStorage.setItem('fmbc-age-verified', '1') } catch { /* ignore */ }
+    try { setAgeVerifiedCookie() } catch { /* ignore */ }
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const html = document.documentElement
