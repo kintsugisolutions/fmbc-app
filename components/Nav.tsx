@@ -1,10 +1,12 @@
 import Image from 'next/image'
 import { Suspense } from 'react'
 import StoreCount from './StoreCount'
+import NavScrollEffect from './NavScrollEffect'
 
 export default function Nav() {
   return (
     <nav className="nav">
+      <NavScrollEffect />
       <div className="nav-left">
         <Image
           src="/fmbc_icon.png"

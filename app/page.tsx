@@ -4,14 +4,20 @@ import Nav from '@/components/Nav'
 import HeroContent from '@/components/HeroContent'
 import BrowseSection from '@/components/BrowseSection'
 import BrowseSkeleton from '@/components/BrowseSkeleton'
+import HeroSkeleton from '@/components/HeroSkeleton'
+import CounterSkeleton from '@/components/CounterSkeleton'
 import LiveSearchCounter from '@/components/LiveSearchCounter'
 import WASection from '@/components/WASection'
 import FAQSection from '@/components/FAQSection'
+import HowItWorks from '@/components/HowItWorks'
+import Reveal from '@/components/Reveal'
 import StickyBar from '@/components/StickyBar'
+import ScrollCue from '@/components/ScrollCue'
 
-const AREAS_PREVIEW = [
-  'Model Town','BRS Nagar','Civil Lines','Sarabha Nagar',
-  'Dugri','Pakhowal Road','Ferozepur Road','+ 4 more'
+// Areas covered — scrolls as a marquee in the hero. Mirrors the service-area list.
+const AREAS_CAROUSEL = [
+  'Model Town','BRS Nagar','Civil Lines','Sarabha Nagar','Dugri',
+  'Pakhowal Road','Ferozepur Road','Gurdev Nagar','Haibowal','Raikot Road',
 ]
 
 export default function Home() {
@@ -30,93 +36,54 @@ export default function Home() {
           </div>
 
           <h1 className="hero-title">
-            Find the bottle<br />
-            <span>you have been looking for.</span>
+            <span className="hero-title-line"><span className="hero-title-lead">Find the bottle</span></span>
+            <span className="hero-title-line"><span className="hero-title-accent">you have been looking for.</span></span>
           </h1>
 
-          <div className="areas-strip">
-            <span className="areas-label mono">Covering</span>
-            <div className="areas-pills">
-              {AREAS_PREVIEW.map(a => (
-                <span key={a} className={`area-pill mono${a.startsWith('+') ? ' area-pill--more' : ''}`}>{a}</span>
-              ))}
+          <div className="areas-block">
+            <p className="areas-label mono">Covering</p>
+            <div className="areas-marquee" aria-hidden="true">
+              <div className="areas-track">
+                {[...AREAS_CAROUSEL, ...AREAS_CAROUSEL].map((a, i) => (
+                  <span key={i} className="area-pill mono">{a}</span>
+                ))}
+              </div>
             </div>
+            <p className="sr-only">Covering {AREAS_CAROUSEL.join(', ')} and more across Ludhiana.</p>
           </div>
 
           {/* Live search counter — server component, hidden until total > 0 */}
-          <Suspense fallback={null}>
+          <Suspense fallback={<CounterSkeleton />}>
             <LiveSearchCounter />
           </Suspense>
 
-          {/* Dynamic: hero-sub + ticker + form — requires client */}
-          <Suspense fallback={
-            <div style={{maxWidth:'520px',margin:'0 auto',minHeight:'400px'}} />
-          }>
+          {/* Dynamic: hero-sub + ticker + form + destination mark — requires client.
+              The mark (bottle for "buy", beer mug for "find a bar") lives inside
+              HeroContent so it can react to the mode toggle; SearchPin lands on it. */}
+          <Suspense fallback={<HeroSkeleton />}>
             <HeroContent />
           </Suspense>
         </section>
 
         {/* ── Browse ───────────────────────────────────────────────────── */}
-        <Suspense fallback={<BrowseSkeleton />}>
-          <BrowseSection />
-        </Suspense>
+        <Reveal>
+          <Suspense fallback={<BrowseSkeleton />}>
+            <BrowseSection />
+          </Suspense>
+        </Reveal>
 
         {/* ── How It Works ─────────────────────────────────────────────── */}
-        <section className="how-section">
-          <div className="container">
-            <p className="section-eyebrow mono">How it works</p>
-            <h2 className="section-title">Three steps. One WhatsApp.</h2>
-
-            <div className="steps">
-              <div className="step">
-                <p className="step-num mono">01</p>
-                <div className="step-icon">
-                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="14" cy="14" r="8.5" stroke="#D2A74F" strokeWidth="1.5"/>
-                    <path d="M20.5 20.5L27 27" stroke="#D2A74F" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
-                </div>
-                <h3 className="step-title">You search</h3>
-                <p className="step-desc">Tell us what you are looking for and where you are in Ludhiana. Takes 20 seconds.</p>
-              </div>
-
-              <div className="step-connector" aria-hidden="true" />
-
-              <div className="step">
-                <p className="step-num mono">02</p>
-                <div className="step-icon">
-                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 5C9.925 5 5 9.477 5 15c0 2.013.618 3.882 1.681 5.438L5 27l6.738-1.663A11.1 11.1 0 0016 27c6.075 0 11-4.477 11-10S22.075 5 16 5z" stroke="#D2A74F" strokeWidth="1.5" strokeLinejoin="round"/>
-                    <path d="M11 15h.01M16 15h.01M21 15h.01" stroke="#D2A74F" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </div>
-                <h3 className="step-title">We check</h3>
-                <p className="step-desc">We reach out to our verified store network in Ludhiana and confirm availability in real time.</p>
-              </div>
-
-              <div className="step-connector" aria-hidden="true" />
-
-              <div className="step">
-                <p className="step-num mono">03</p>
-                <div className="step-icon">
-                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 5a7 7 0 00-7 7v5l-2 3h18l-2-3v-5a7 7 0 00-7-7z" stroke="#D2A74F" strokeWidth="1.5" strokeLinejoin="round"/>
-                    <path d="M13.5 24a2.5 2.5 0 005 0" stroke="#D2A74F" strokeWidth="1.5" strokeLinecap="round"/>
-                    <circle cx="16" cy="5" r="1.5" fill="#D2A74F"/>
-                  </svg>
-                </div>
-                <h3 className="step-title">You get notified</h3>
-                <p className="step-desc">A WhatsApp arrives with the store name, area, and contact. If nothing is available, you are on the watchlist.</p>
-              </div>
-            </div>
-          </div>
-        </section>
+        <HowItWorks />
 
         {/* ── WhatsApp Preview ─────────────────────────────────────────── */}
-        <WASection />
+        <Reveal>
+          <WASection />
+        </Reveal>
 
         {/* ── FAQ ──────────────────────────────────────────────────────── */}
-        <FAQSection />
+        <Reveal>
+          <FAQSection />
+        </Reveal>
       </main>
 
       {/* ── Footer ───────────────────────────────────────────────────── */}
@@ -149,6 +116,11 @@ export default function Home() {
         </div>
         <p className="footer-version mono">v1.0 · Effective 9 June 2026 · Governed by laws of India · Jurisdiction: Ludhiana, Punjab</p>
       </footer>
+
+      {/* Post-animation "Search Now" cue → smooth-scrolls to the form. Rendered at
+          page root (NOT inside .hero) so position:fixed isn't trapped by the hero's
+          animation transform + overflow:hidden. */}
+      <ScrollCue targetId="search-form" />
 
       {/* ── Sticky mobile CTA ────────────────────────────────────────── */}
       <StickyBar />

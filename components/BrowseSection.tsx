@@ -28,10 +28,18 @@ export default async function BrowseSection() {
     if (error) throw error
     if (data) products = data as Product[]
   } catch {
-    // Browse is non-critical — if Supabase is unreachable, the section simply doesn't render.
-    return null
+    // Browse is non-critical and the search form is the primary path. On failure we
+    // point people there rather than exposing the error or showing a dead section.
+    return (
+      <section className="browse-section browse-section--unavailable" aria-label="Browse bottles">
+        <p className="browse-unavailable mono">
+          Browse list temporarily unavailable. Use the search form above.
+        </p>
+      </section>
+    )
   }
 
+  // Empty (pre-launch, no products yet) is a legitimate state — render nothing.
   if (products.length === 0) return null
 
   // Group products by category

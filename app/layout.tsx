@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from 'next'
-import { Cormorant_Garamond } from 'next/font/google'
+import { Cormorant_Garamond, IBM_Plex_Mono } from 'next/font/google'
 import AgeGate from '@/components/AgeGate'
+import BootLoader from '@/components/BootLoader'
 import DepthField from '@/components/DepthField'
+import SearchPin from '@/components/SearchPin'
+import GateRevealSweep from '@/components/GateRevealSweep'
 import IosInstallPrompt from '@/components/IosInstallPrompt'
 import './globals.css'
 
@@ -13,6 +16,19 @@ const cormorant = Cormorant_Garamond({
   style: ['normal', 'italic'],
   variable: '--font-display',
   display: 'swap',
+})
+
+// ── Functional/mono layer — IBM Plex Mono. Replaces Courier New for the small,
+// tracked-out uppercase labels used throughout; it has a larger x-height and far
+// clearer letterforms at 9–12px, so the functional layer reads better while
+// keeping the same monospace character. Self-hosted via next/font (CSP stays clean).
+const plexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  style: ['normal'],
+  variable: '--font-mono',
+  display: 'swap',
+  fallback: ['ui-monospace', 'Courier New', 'monospace'],
 })
 
 // ── Pre-paint gate decision ──────────────────────────────────────────────────
@@ -92,10 +108,13 @@ const jsonLd = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={cormorant.variable} suppressHydrationWarning>
+    <html lang="en" className={`${cormorant.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <body>
         {/* Pre-paint gate decision — must be the first thing in the body */}
         <script dangerouslySetInnerHTML={{ __html: gateScript }} />
+
+        {/* Brand splash on first load — fades to reveal the age gate (CSS auto-hide) */}
+        <BootLoader />
 
         {/* Skip navigation — keyboard / screen reader users skip directly to search */}
         <a href="#search-anchor" className="sr-only">Skip to search</a>
@@ -103,8 +122,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Layered depth background — fixed, behind all content */}
         <DepthField />
 
+        {/* Map pin that drops onto the bottle on search submit — fixed, decorative, home only */}
+        <SearchPin />
+
         {/* Age gate renders on every page — blocks content until 25+ is confirmed */}
         <AgeGate />
+        {/* One-shot gold sweep when the gate clears (listens for fmbc:verified) */}
+        <GateRevealSweep />
         {children}
 
         {/* iOS Safari "Add to Home Screen" prompt — shows once, after age verification */}

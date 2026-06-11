@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 const FAQS = [
   {
@@ -26,6 +27,7 @@ const FAQS = [
 
 export default function FAQSection() {
   const [open, setOpen] = useState<number | null>(null)
+  const reduced = useReducedMotion() ?? false
 
   return (
     <section className="faq-section">
@@ -34,21 +36,58 @@ export default function FAQSection() {
         <h2 className="section-title">Things people ask</h2>
 
         <div className="faq-list">
-          {FAQS.map((item, i) => (
-            <div key={i} className={`faq-item${open === i ? ' faq-item--open' : ''}`}>
-              <button
-                className="faq-q"
-                onClick={() => setOpen(open === i ? null : i)}
-                aria-expanded={open === i}
-              >
-                <span>{item.q}</span>
-                <span className="faq-icon mono" aria-hidden="true">{open === i ? '−' : '+'}</span>
-              </button>
-              {open === i && (
-                <p className="faq-a">{item.a}</p>
-              )}
-            </div>
-          ))}
+          {FAQS.map((item, i) => {
+            const isOpen = open === i
+            return (
+              <div key={i} className={`faq-item${isOpen ? ' faq-item--open' : ''}`}>
+                <motion.button
+                  className="faq-q"
+                  onClick={() => setOpen(isOpen ? null : i)}
+                  aria-expanded={isOpen}
+                  animate={reduced ? undefined : { rotateX: isOpen ? 2 : 0 }}
+                  transition={{ duration: 0.25 }}
+                  style={{ transformOrigin: 'top center' }}
+                >
+                  <span>{item.q}</span>
+                  <motion.span
+                    className="faq-icon mono"
+                    aria-hidden="true"
+                    animate={reduced ? undefined : { rotate: isOpen ? 45 : 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    +
+                  </motion.span>
+                </motion.button>
+
+                {reduced ? (
+                  isOpen && <p className="faq-a">{item.a}</p>
+                ) : (
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        key="answer"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.28, ease: 'easeOut' }}
+                        style={{ overflow: 'hidden' }}
+                      >
+                        <motion.p
+                          className="faq-a"
+                          initial={{ y: -8 }}
+                          animate={{ y: 0 }}
+                          exit={{ y: -8 }}
+                          transition={{ duration: 0.28, ease: 'easeOut' }}
+                        >
+                          {item.a}
+                        </motion.p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
     </section>

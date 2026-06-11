@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { motion, useReducedMotion } from 'framer-motion'
+import WhatsAppMark from './WhatsAppMark'
 
 const AREAS = [
   'Anywhere in Ludhiana',
@@ -9,9 +11,95 @@ const AREAS = [
   'Haibowal','Raikot Road','Other'
 ]
 
-type Status = 'idle' | 'loading' | 'success' | 'error'
+type Status = 'idle' | 'loading' | 'success' | 'error' | 'timeout'
 type Props = { mode?: 'buy' | 'drink' }
 type Suggestion = { name: string; category: string }
+
+const SEARCH_TIMEOUT_MS = 12000
+const MAX_RETRIES = 2
+
+// Mark that fills gold bottom→top when a search registers, with a sparkle once
+// full. The fill is a rising rect clipped to the silhouette: a bottle for store
+// searches, a beer mug (foam + handle) for venue searches.
+function BottleFill({ mode }: { mode: 'buy' | 'drink' }) {
+  const reduced = useReducedMotion() ?? false
+  const isMug = mode === 'drink'
+  const w = isMug ? 60 : 44
+  const h = isMug ? 60 : 92
+  const body = isMug
+    ? 'M12 18 L42 18 L40 53 Q40 56 37 56 L17 56 Q14 56 14 53 Z'
+    : 'M16 5 L28 5 L28 13 L26 13 L26 24 L36 39 L36 83 Q36 88 31 88 L13 88 Q8 88 8 83 L8 39 L18 24 L18 13 L16 13 Z'
+  const sparkle = isMug
+    ? { d: 'M45 7l1.4 3.2 3.2 1.4-3.2 1.4-1.4 3.2-1.4-3.2-3.2-1.4 3.2-1.4z', origin: '45px 11px' }
+    : { d: 'M34 12l1.4 3.2L38.6 16.6 35.4 18 34 21.2 32.6 18 29.4 16.6 32.6 15.2z', origin: '34px 16px' }
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label={isMug ? 'Venue found' : 'Bottle found'}>
+      <defs>
+        <clipPath id="fmbc-fill-clip"><path d={body} /></clipPath>
+        <linearGradient id="fmbc-fill-grad" x1="0" y1={h} x2="0" y2="0">
+          <stop offset="0" stopColor="#A07830" />
+          <stop offset="1" stopColor="#E8C878" />
+        </linearGradient>
+      </defs>
+      <g clipPath="url(#fmbc-fill-clip)">
+        <motion.rect
+          x="0" width={w} fill="url(#fmbc-fill-grad)"
+          initial={reduced ? { y: 0, height: h } : { y: h, height: 0 }}
+          animate={{ y: 0, height: h }}
+          transition={{ duration: 1, ease: 'easeOut', delay: 0.15 }}
+        />
+      </g>
+      <path d={body} fill="none" stroke="#D2A74F" strokeWidth="1.7" strokeLinejoin="round" />
+      {isMug ? (
+        <>
+          <path d="M42 26 C52 26 53 31 53 36 C53 43 52 48 42 48" fill="none" stroke="#D2A74F" strokeWidth="1.7" strokeLinejoin="round" />
+          <path d="M11 18 C8 9 13 4 18 7 C20 1 30 1 32 7 C38 4 43 9 41 18 Z" fill="rgba(232,200,120,0.2)" stroke="#E8C878" strokeWidth="1.5" strokeLinejoin="round" />
+        </>
+      ) : (
+        <path d="M12 64 L32 56 L32 48 L12 56 Z" fill="none" stroke="#E8C878" strokeWidth="1.1" strokeLinejoin="round" opacity="0.7" />
+      )}
+      {/* Sparkle once full */}
+      <motion.path
+        d={sparkle.d}
+        fill="#FAF6EE"
+        initial={reduced ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0 }}
+        animate={reduced ? undefined : { opacity: [0, 1, 0.85], scale: [0, 1.2, 1] }}
+        transition={{ duration: 0.6, delay: 1.15, ease: 'easeOut' }}
+        style={{ transformOrigin: sparkle.origin }}
+      />
+    </svg>
+  )
+}
+
+function TimeoutOverlay({ canRetry, onRetry, onReset }: {
+  canRetry: boolean; onRetry: () => void; onReset: () => void
+}) {
+  return (
+    <div className="success-overlay" onClick={onReset}>
+      <div className="success-card" onClick={e => e.stopPropagation()}>
+        <div className="success-icon-wrap">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="20" cy="20" r="19" stroke="#D2A74F" strokeWidth="1.5" opacity="0.5"/>
+            <path d="M20 11v9l6 4" stroke="#D2A74F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h2 className="success-title">Taking longer than usual…</h2>
+        <p className="success-sub">
+          Our network is slow to respond right now. Your details are safe — nothing
+          was submitted twice.
+        </p>
+        {canRetry ? (
+          <button className="success-close" onClick={onRetry}>Try again</button>
+        ) : (
+          <p className="success-watchlist" style={{ marginBottom: 24 }}>
+            Still no luck. Reset the form and try again in a few minutes.
+          </p>
+        )}
+        <button className="overlay-ghost-btn mono" onClick={onReset}>Reset form</button>
+      </div>
+    </div>
+  )
+}
 
 function SuccessOverlay({ product, area, mode, onClose }: {
   product: string; area: string; mode: 'buy'|'drink'; onClose: () => void
@@ -24,11 +112,8 @@ function SuccessOverlay({ product, area, mode, onClose }: {
   return (
     <div className="success-overlay" onClick={onClose}>
       <div className="success-card" onClick={e => e.stopPropagation()}>
-        <div className="success-icon-wrap">
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="20" cy="20" r="19" stroke="#D2A74F" strokeWidth="1.5"/>
-            <path d="M12 20l6 6 10-12" stroke="#D2A74F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+        <div className="success-icon-wrap success-icon-wrap--bottle">
+          <BottleFill mode={mode} />
         </div>
         <h2 className="success-title">Your search is live.</h2>
         <p className="success-product mono">{product}</p>
@@ -55,12 +140,46 @@ export default function SearchForm({ mode = 'buy' }: Props) {
   const [consent, setConsent] = useState(false)
   const [status, setStatus]   = useState<Status>('idle')
   const [error, setError]     = useState('')
+  const [retryCount, setRetryCount] = useState(0)
 
   const [allProducts, setAllProducts]   = useState<Suggestion[]>([])
   const [suggestions, setSuggestions]   = useState<Suggestion[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [activeIndex, setActiveIndex]   = useState(-1)
   const wrapRef = useRef<HTMLDivElement>(null)
+
+  // ── Form-card tilt ──────────────────────────────────────────────────────────
+  // Subtle 3D tilt + specular highlight tracking the pointer. Only on fine-pointer,
+  // motion-allowed devices, and it stays flat whenever a field is focused so typing
+  // is never disorienting.
+  const formRef = useRef<HTMLFormElement>(null)
+  const tiltOK  = useRef(false)
+  useEffect(() => {
+    tiltOK.current =
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  }, [])
+  function resetTilt() {
+    const el = formRef.current
+    if (!el) return
+    el.style.setProperty('--rx', '0deg')
+    el.style.setProperty('--ry', '0deg')
+    el.classList.remove('form-wrap--tilt')
+  }
+  function handleTiltMove(e: React.MouseEvent<HTMLFormElement>) {
+    const el = formRef.current
+    if (!el || !tiltOK.current) return
+    // Keep flat while a field is focused (stable typing)
+    if (el.contains(document.activeElement) && document.activeElement !== document.body) return
+    const r = el.getBoundingClientRect()
+    const px = (e.clientX - r.left) / r.width
+    const py = (e.clientY - r.top) / r.height
+    el.style.setProperty('--ry', `${(px - 0.5) * 12}deg`)
+    el.style.setProperty('--rx', `${(0.5 - py) * 12}deg`)
+    el.style.setProperty('--mx', `${px * 100}%`)
+    el.style.setProperty('--my', `${py * 100}%`)
+    el.classList.add('form-wrap--tilt')
+  }
 
   const productValid = product.trim().length >= 2
   const areaValid    = area !== ''
@@ -125,28 +244,64 @@ export default function SearchForm({ mode = 'buy' }: Props) {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!product.trim() || !area || !phone.trim()) return
-    if (!phoneValid) { setError('Enter a valid 10-digit Indian mobile number.'); return }
-    if (!consent)   { setError('Please confirm your consent to continue.'); return }
+  // Runs the actual request. Aborts at 12s and routes to the timeout UI so a slow
+  // network reads as "still working" rather than a hard failure. 429 handling is
+  // preserved exactly. Used by both first submit and retries.
+  async function runSearch() {
     setError('')
     setStatus('loading')
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS)
     try {
       const res = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product, area, phone: phone.trim(), searchType: mode }),
+        signal: controller.signal,
       })
+      clearTimeout(timer)
       if (res.status === 429) {
         setError('Too many searches. Please wait a few minutes and try again.')
         setStatus('idle'); return
       }
       if (!res.ok) throw new Error('Search failed')
       setStatus('success')
-    } catch {
-      setStatus('error')
+      setRetryCount(0)
+    } catch (err) {
+      clearTimeout(timer)
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setStatus('timeout')
+      } else {
+        setStatus('error')
+      }
     }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!product.trim() || !area || !phone.trim()) return
+    if (!phoneValid) { setError('Enter a valid 10-digit Indian mobile number.'); return }
+    if (!consent)   { setError('Please confirm your consent to continue.'); return }
+    // Fire the "finding your bottle" pin out of the submit button
+    const btn = (e.currentTarget as HTMLFormElement).querySelector('.submit-btn')
+    if (btn) {
+      const r = btn.getBoundingClientRect()
+      window.dispatchEvent(new CustomEvent('fmbc:search-pin', {
+        detail: { x: r.left + r.width / 2, y: r.top + r.height / 2 },
+      }))
+    }
+    setRetryCount(0)
+    runSearch()
+  }
+
+  function handleRetry() {
+    setRetryCount(c => c + 1)
+    runSearch()
+  }
+
+  function handleReset() {
+    setProduct(''); setArea(''); setPhone(''); setConsent(false)
+    setError(''); setRetryCount(0); setStatus('idle')
   }
 
   const placeholder = mode === 'buy'
@@ -159,7 +314,22 @@ export default function SearchForm({ mode = 'buy' }: Props) {
         <SuccessOverlay product={product} area={area} mode={mode} onClose={() => setStatus('idle')} />
       )}
 
-      <form className="form-wrap" onSubmit={handleSubmit}>
+      {status === 'timeout' && (
+        <TimeoutOverlay
+          canRetry={retryCount < MAX_RETRIES}
+          onRetry={handleRetry}
+          onReset={handleReset}
+        />
+      )}
+
+      <form
+        className="form-wrap"
+        onSubmit={handleSubmit}
+        ref={formRef}
+        onMouseMove={handleTiltMove}
+        onMouseLeave={resetTilt}
+        onFocusCapture={resetTilt}
+      >
         <div className={`field${productValid ? ' field--valid' : ''}${showSuggestions ? ' field--open' : ''}`} ref={wrapRef}>
           <label>What are you looking for?</label>
           <input
@@ -206,10 +376,7 @@ export default function SearchForm({ mode = 'buy' }: Props) {
           <label>Your WhatsApp number</label>
           <div className="phone-wrap">
             <span className="phone-prefix mono">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
-                <path d="M12 3C7.03 3 3 7.03 3 12c0 1.77.49 3.42 1.34 4.84L3 21l4.3-1.31A9 9 0 1012 3z" fill="#25D366"/>
-                <path d="M9.2 7.8c-.2-.5-.7-.5-.9 0l-.6 1.4c-.1.3 0 .6.2.8.5.6 1.1 1.1 1.7 1.6.8.6 1.6 1.1 2.5 1.4.3.1.7 0 .9-.3l.8-1c.2-.3.5-.3.8-.1l1.8 1.1c.3.2.4.5.3.8-.3.9-1.1 1.8-2 1.8-2.5 0-6.2-3.5-6.2-6 0-.9.8-1.7 1.7-2z" fill="white"/>
-              </svg>
+              <WhatsAppMark size={16} style={{ flexShrink: 0 }} />
               +91
             </span>
             <input
