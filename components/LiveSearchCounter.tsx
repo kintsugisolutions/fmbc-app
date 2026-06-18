@@ -1,29 +1,29 @@
-// Server component — shows a "searches today" signal in the hero.
-// The product has no per-day timestamped search data (search_count is an all-time
-// cumulative counter), so this is a deterministic, date-seeded number: stable
-// within a day, different each day. It's a soft launch signal, not a real count.
-export default function LiveSearchCounter() {
-  // IST date (the service is Ludhiana) as "YYYY-MM-DD", so the number rolls over at
-  // local midnight rather than UTC.
-  const istDate = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
+// Server component — shows total cumulative searches as a trust signal in the hero.
+// Pulls the real sum of search_count from the products table via Supabase.
+// Returns null when the total is 0 (pre-launch / empty DB) so nothing shows
+// until there is real data to back the claim.
+import { createClient } from '@/lib/supabase'
 
-  // FNV-1a hash of the date → a stable daily value in the 9–24 range.
-  let h = 2166136261
-  for (let i = 0; i < istDate.length; i++) {
-    h ^= istDate.charCodeAt(i)
-    h = Math.imul(h, 16777619)
+export default async function LiveSearchCounter() {
+  try {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('products')
+      .select('search_count')
+
+    if (error || !data) return null
+
+    const total = data.reduce((sum, row) => sum + (row.search_count ?? 0), 0)
+    if (total === 0) return null
+
+    return (
+      <p className="search-counter mono" aria-live="polite">
+        <span className="counter-dot" aria-hidden="true" />
+        {total.toLocaleString('en-IN')} searches and counting
+      </p>
+    )
+  } catch {
+    // Non-critical — fail silently rather than breaking the hero
+    return null
   }
-  const count = 9 + (Math.abs(h) % 16)
-
-  return (
-    <p className="search-counter mono" aria-live="polite">
-      <span className="counter-dot" aria-hidden="true" />
-      {count} searches placed today
-    </p>
-  )
 }

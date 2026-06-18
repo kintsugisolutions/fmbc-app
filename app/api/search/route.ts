@@ -48,10 +48,23 @@ const ALLOWED_ORIGINS = [
 
 export async function POST(req: NextRequest) {
   try {
+    // ── Age verification ────────────────────────────────────────────────────
+    // The age gate overlay is client-side only. This server-side check ensures
+    // the API cannot be called directly (curl, scripts) without a verified cookie.
+    // Punjab Excise Act 1914 requires reasonable effort to prevent under-25 access.
+    const ageCookie = req.cookies.get('fmbc-age-verified')
+    if (!ageCookie || ageCookie.value !== '1') {
+      return NextResponse.json({ error: 'Age verification required' }, { status: 403 })
+    }
+
     // ── CSRF: Origin check ──────────────────────────────────────────────────
-    // Rejects requests from any domain that isn't FMBC itself.
-    // Browsers always send Origin on cross-origin POST; absence means direct API call
-    // (e.g. curl in dev) — allow those only in development.
+    // Rejects cross-origin browser requests from domains that aren't FMBC.
+    // Browsers always send Origin on cross-origin POST requests.
+    // KNOWN GAP: headerless clients (curl, Postman, server-side scripts) do not
+    // send Origin and will pass this check. That gap is intentional for dev/testing,
+    // and is mitigated by the two layers above and below this comment:
+    //   • Age cookie check (above) — direct callers without a browser session fail here
+    //   • Rate limiter (below) — limits request volume regardless of origin
     const origin = req.headers.get('origin')
     if (origin && !ALLOWED_ORIGINS.includes(origin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -106,13 +119,17 @@ export async function POST(req: NextRequest) {
     // ── n8n webhook secret ────────────────────────────────────────────────────
     // X-FMBC-Secret prevents anyone who discovers the webhook URL from bypassing
     // the Next.js rate limiter and spamming n8n directly.
-    // TO ACTIVATE: Add N8N_WEBHOOK_SECRET to .env.local and Vercel env vars,
-    // then validate this header in your n8n webhook node's "Header Auth" settings.
+    // Mandatory — the route refuses to forward without it. Set N8N_WEBHOOK_SECRET
+    // in .env.local and Vercel env vars, then validate this header in your n8n
+    // webhook node's "Header Auth" settings.
+    const webhookSecret = process.env.N8N_WEBHOOK_SECRET
+    if (!webhookSecret) {
+      console.error('N8N_WEBHOOK_SECRET is not configured — refusing to forward to n8n')
+      return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
+    }
     const webhookHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-    }
-    if (process.env.N8N_WEBHOOK_SECRET) {
-      webhookHeaders['X-FMBC-Secret'] = process.env.N8N_WEBHOOK_SECRET
+      'X-FMBC-Secret': webhookSecret,
     }
 
     const res = await fetch(webhookUrl, {

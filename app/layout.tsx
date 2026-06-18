@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { headers } from 'next/headers'
 import { Cormorant_Garamond, IBM_Plex_Mono } from 'next/font/google'
 import AgeGate from '@/components/AgeGate'
 import BootLoader from '@/components/BootLoader'
@@ -109,11 +110,19 @@ const jsonLd = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Nonce generated per-request by middleware.ts and forwarded via x-nonce header.
+  // Applied to every dangerouslySetInnerHTML <script> so the nonce-based CSP
+  // (no 'unsafe-inline') trusts only these specific inline scripts.
+  // ⚠️  dangerouslySetInnerHTML below uses only hardcoded/static values.
+  //     Never interpolate Supabase data, URL params, or user input here —
+  //     doing so without sanitisation would create a stored XSS in the <head>.
+  const nonce = headers().get('x-nonce') ?? ''
+
   return (
     <html lang="en" className={`${cormorant.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <body>
         {/* Pre-paint gate decision — must be the first thing in the body */}
-        <script dangerouslySetInnerHTML={{ __html: gateScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: gateScript }} />
 
         {/* Brand splash on first load — fades to reveal the age gate (CSS auto-hide) */}
         <BootLoader />
@@ -136,8 +145,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* iOS Safari "Add to Home Screen" prompt — shows once, after age verification */}
         <IosInstallPrompt />
 
-        {/* JSON-LD structured data */}
+        {/* JSON-LD structured data — static object only, no user input */}
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />

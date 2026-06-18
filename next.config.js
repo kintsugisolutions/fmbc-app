@@ -1,25 +1,11 @@
 /** @type {import('next').NextConfig} */
 
-// ─── Content Security Policy ──────────────────────────────────────────────────
-// Restricts which scripts, styles, and connections the browser trusts.
-// 'unsafe-inline' on script/style is required while Next.js inlines runtime code.
-// Tighten to nonce-based CSP in v2 when you move to a custom server or Vercel edge middleware.
-// connect-src is a strict allowlist: self + Supabase only. The n8n webhook is
-// called server-side (never from the browser), so it does NOT belong here.
-// 'unsafe-eval' is required by Next.js dev tooling only — never shipped to prod.
-const isDev = process.env.NODE_ENV === 'development'
-
-const cspDirectives = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https:",
-  "font-src 'self'",                                    // next/font self-hosts — no external font origins needed
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-  "frame-ancestors 'none'",                             // stronger than X-Frame-Options
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ')
+// ─── Security Headers ──────────────────────────────────────────────────────────
+// NOTE: Content-Security-Policy is intentionally absent here.
+// It is set dynamically per-request by middleware.ts with a per-request nonce,
+// which allows 'unsafe-inline' to be removed from script-src entirely.
+// All other headers below are static and safe to set at the config level.
+// ──────────────────────────────────────────────────────────────────────────────
 
 const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
@@ -31,8 +17,10 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   // Disable camera, mic, geolocation — FMBC doesn't use any of these
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-  // Content Security Policy — restricts resource loading to trusted sources
-  { key: 'Content-Security-Policy', value: cspDirectives },
+  // HSTS — tells browsers to always use HTTPS for the next 2 years.
+  // Prevents SSL stripping attacks on first-time visitors on public WiFi.
+  // includeSubDomains covers www. preload allows submission to the browser HSTS preload list.
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 ]
 
 const nextConfig = {
