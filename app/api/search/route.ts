@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import { getVenuesForArea, findMatchingProduct, createUserSearch, createVenueQuery } from '@/lib/airtable'
+import { sendWhatsAppTemplate } from '@/lib/interakt'
 
 // ─── Rate limiter (Upstash Redis — persistent across Vercel cold starts) ──────
 // Sliding window: 5 requests per IP per 10 minutes.
@@ -110,50 +112,70 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid area' }, { status: 400 })
     }
 
-    const webhookUrl = process.env.N8N_WEBHOOK_URL
-    if (!webhookUrl) {
-      console.error('N8N_WEBHOOK_URL is not set')
-      return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
-    }
+    const cleanProduct = sanitise(product)
 
-    // ── n8n webhook secret ────────────────────────────────────────────────────
-    // X-FMBC-Secret prevents anyone who discovers the webhook URL from bypassing
-    // the Next.js rate limiter and spamming n8n directly.
-    // Mandatory — the route refuses to forward without it. Set N8N_WEBHOOK_SECRET
-    // in .env.local and Vercel env vars, then validate this header in your n8n
-    // webhook node's "Header Auth" settings.
-    const webhookSecret = process.env.N8N_WEBHOOK_SECRET
-    if (!webhookSecret) {
-      console.error('N8N_WEBHOOK_SECRET is not configured — refusing to forward to n8n')
-      return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
-    }
-    const webhookHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-FMBC-Secret': webhookSecret,
-    }
+    // ── NOTIFY_MODE switch ──────────────────────────────────────────────────
+    // "n8n" (default, unchanged behaviour) forwards to the n8n webhook as before.
+    // "direct" is the Plan B path: Next.js talks to Airtable + Interakt itself,
+    // with no n8n workspace in the loop at all. Added after the n8n Cloud
+    // workspace was deleted (free trial lapsed, no workflow backup existed) —
+    // see git history on this file for context. Sehaj is rebuilding the n8n
+    // workflow as the primary path; this exists as a tested fallback in case
+    // that workspace has problems again, and can be flipped on by setting
+    // NOTIFY_MODE=direct in Vercel without a code change.
+    const notifyMode = process.env.NOTIFY_MODE === 'direct' ? 'direct' : 'n8n'
 
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: webhookHeaders,
-      body: JSON.stringify({
-        product:    sanitise(product),
-        area,
-        phone:      `91${phone}`,
-        searchType,
-        source:     'web',
-        timestamp:  new Date().toISOString(),
-      }),
-    })
+    if (notifyMode === 'direct') {
+      const result = await handleDirectNotify({ product: cleanProduct, area, phone, searchType })
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
+      }
+    } else {
+      const webhookUrl = process.env.N8N_WEBHOOK_URL
+      if (!webhookUrl) {
+        console.error('N8N_WEBHOOK_URL is not set')
+        return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
+      }
 
-    if (!res.ok) {
-      console.error('n8n webhook error:', res.status)
-      return NextResponse.json({ error: 'Search could not be processed' }, { status: 502 })
+      // ── n8n webhook secret ──────────────────────────────────────────────────
+      // X-FMBC-Secret prevents anyone who discovers the webhook URL from bypassing
+      // the Next.js rate limiter and spamming n8n directly.
+      // Mandatory — the route refuses to forward without it. Set N8N_WEBHOOK_SECRET
+      // in .env.local and Vercel env vars, then validate this header in your n8n
+      // webhook node's "Header Auth" settings.
+      const webhookSecret = process.env.N8N_WEBHOOK_SECRET
+      if (!webhookSecret) {
+        console.error('N8N_WEBHOOK_SECRET is not configured — refusing to forward to n8n')
+        return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
+      }
+      const webhookHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-FMBC-Secret': webhookSecret,
+      }
+
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: webhookHeaders,
+        body: JSON.stringify({
+          product:    cleanProduct,
+          area,
+          phone:      `91${phone}`,
+          searchType,
+          source:     'web',
+          timestamp:  new Date().toISOString(),
+        }),
+      })
+
+      if (!res.ok) {
+        console.error('n8n webhook error:', res.status)
+        return NextResponse.json({ error: 'Search could not be processed' }, { status: 502 })
+      }
     }
 
     // ── Increment search_count in Supabase (fire-and-forget) ─────────────────
     // Non-blocking — a Supabase failure must never break the user-facing search.
     createClient()
-      .rpc('increment_product_search_count', { product_name_input: sanitise(product) })
+      .rpc('increment_product_search_count', { product_name_input: cleanProduct })
       .then(
         () => {},
         (e: unknown) => console.warn('search_count increment failed:', e)
@@ -164,4 +186,96 @@ export async function POST(req: NextRequest) {
     console.error('Search API error:', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
+}
+
+// Maps the UI's compact searchType values to the Airtable "Search Type" choices.
+const SEARCH_TYPE_LABEL: Record<string, 'Buy a Bottle' | 'Drink Now'> = {
+  buy: 'Buy a Bottle',
+  drink: 'Drink Now',
+}
+
+// Max venues notified per search — a ceiling on both Interakt cost and
+// store-message-fatigue, independent of how many venues Airtable returns.
+const MAX_VENUES_TO_NOTIFY = 5
+
+const INTERAKT_TEMPLATE_NAME = process.env.INTERAKT_TEMPLATE_NAME || 'search_received'
+
+// The "direct" NOTIFY_MODE path: Airtable venue lookup + Interakt send +
+// Airtable audit trail, with no n8n workspace involved at any step.
+async function handleDirectNotify(input: {
+  product: string
+  area: string
+  phone: string
+  searchType: string
+}): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const searchTypeLabel = SEARCH_TYPE_LABEL[input.searchType]
+  if (!searchTypeLabel) {
+    // Should be unreachable — the earlier whitelist check already rejects
+    // anything outside ['buy', 'drink'] — but fail closed rather than send
+    // an unmapped value into Airtable's Search Type single-select.
+    return { ok: false, error: 'Invalid search type', status: 400 }
+  }
+
+  let venues
+  try {
+    venues = await getVenuesForArea(input.area, MAX_VENUES_TO_NOTIFY)
+  } catch (e) {
+    console.error('handleDirectNotify: Airtable venue lookup failed:', e)
+    return { ok: false, error: 'Service unavailable', status: 503 }
+  }
+
+  // Best-effort — a miss must never block the search from reaching stores.
+  const matchedProductId = await findMatchingProduct(input.product)
+
+  if (venues.length === 0) {
+    // No matching stores right now — still log the search (Status: "Not Found")
+    // so it shows up in demand-intelligence reporting as unmet demand, per
+    // FMBC's core thesis that the search data itself is the asset.
+    await createUserSearch({
+      phone: input.phone,
+      product: input.product,
+      searchType: searchTypeLabel,
+      area: input.area,
+      status: 'Not Found',
+      matchedProductId,
+    })
+    // Still a success from the user's point of view — the search was received,
+    // it just didn't match an active venue in that area right now.
+    return { ok: true }
+  }
+
+  const userSearchId = await createUserSearch({
+    phone: input.phone,
+    product: input.product,
+    searchType: searchTypeLabel,
+    area: input.area,
+    status: 'Queries Sent',
+    matchedProductId,
+    matchedVenueIds: venues.map((v) => v.id),
+  })
+
+  // Send to each matched venue. Failures are logged per-venue and don't abort
+  // the batch — one bad number shouldn't stop the rest of the network from
+  // being notified.
+  await Promise.all(
+    venues.map(async (venue) => {
+      const result = await sendWhatsAppTemplate(venue.whatsapp, INTERAKT_TEMPLATE_NAME, [
+        input.product,
+        input.area,
+      ])
+      if (!result.success) {
+        console.error(`handleDirectNotify: Interakt send failed for venue ${venue.id}:`, result.error)
+      }
+      if (userSearchId) {
+        await createVenueQuery({
+          venueId: venue.id,
+          userSearchId,
+          productId: matchedProductId,
+          interaktMessageId: result.id ?? null,
+        })
+      }
+    })
+  )
+
+  return { ok: true }
 }
