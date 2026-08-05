@@ -121,8 +121,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${cormorant.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <body>
-        {/* Pre-paint gate decision — must be the first thing in the body */}
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: gateScript }} />
+        {/* Pre-paint gate decision — must be the first thing in the body.
+            suppressHydrationWarning: the nonce is randomly regenerated per request
+            by design (middleware.ts), so it will legitimately differ between the
+            initial document and any dev-mode background re-fetch that re-invokes
+            middleware — that mismatch is expected, not a bug, and doesn't affect
+            this script (it already ran synchronously during HTML parse). */}
+        <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: gateScript }} />
 
         {/* Brand splash on first load — fades to reveal the age gate (CSS auto-hide) */}
         <BootLoader />
@@ -148,6 +153,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* JSON-LD structured data — static object only, no user input */}
         <script
           nonce={nonce}
+          suppressHydrationWarning
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />

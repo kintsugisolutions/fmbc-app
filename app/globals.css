@@ -20,6 +20,7 @@ a { color: var(--gold); text-decoration: none; }
 .nav-brand { font-family:var(--font-mono); font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--gold-l); }
 .nav-badge { font-family:var(--font-mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:3px 8px; }
 .hero { padding:80px 24px 60px; text-align:center; border-bottom:1px solid var(--bdr); }
+.hero-mark { display:block; margin:28px auto 24px; height:auto; filter:drop-shadow(0 6px 16px rgba(210,167,79,0.18)); }
 .hero-title { font-size:clamp(40px,7.6vw,70px); color:var(--ivory); line-height:1.12; margin-bottom:20px; }
 .hero-title-accent { color:var(--gold); font-style:italic; }
 /* Mask-reveal wrapper: each line rises into view from behind this clipping edge */
@@ -490,6 +491,7 @@ html[data-mode="drink"] .nav--scrolled { background: rgba(37,16,24,0.88); }
   .hero-title    { animation: fadeIn 0.6s 0.24s ease both; }
   .hero-title-lead   { animation: line-rise 0.9s 0.25s cubic-bezier(0.16,1,0.3,1) both; }
   .hero-title-accent { animation: line-rise 0.9s 0.40s cubic-bezier(0.16,1,0.3,1) both; }
+  .hero-mark     { animation: fadeUp 0.5s 0.30s ease both; }
   .areas-block   { animation: fadeUp 0.5s 0.36s ease both; }
   .hero-sub--dynamic { animation: fadeUp 0.5s 0.44s ease both; }
   .ticker-block  { animation: fadeIn 0.6s 0.56s ease both; }
@@ -501,6 +503,7 @@ html[data-mode="drink"] .nav--scrolled { background: rgba(37,16,24,0.88); }
   html[data-gate-open] .hero-title,
   html[data-gate-open] .hero-title-lead,
   html[data-gate-open] .hero-title-accent,
+  html[data-gate-open] .hero-mark,
   html[data-gate-open] .areas-block,
   html[data-gate-open] .hero-sub--dynamic,
   html[data-gate-open] .ticker-block,

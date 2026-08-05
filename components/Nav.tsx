@@ -9,10 +9,10 @@ export default function Nav() {
       <NavScrollEffect />
       <div className="nav-left">
         <Image
-          src="/fmbc_icon.png"
+          src="/fmbc-mark-flat-gold.svg"
           alt="FMBC"
-          width={28}
-          height={28}
+          width={18}
+          height={25}
           className="nav-logo"
           priority
         />

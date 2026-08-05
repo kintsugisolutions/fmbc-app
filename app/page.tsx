@@ -59,6 +59,15 @@ export default function Home() {
             <span className="hero-title-line"><span className="hero-title-accent">you have been looking for.</span></span>
           </h1>
 
+          <Image
+            src="/fmbc-mark-foil.svg"
+            alt=""
+            width={72}
+            height={101}
+            className="hero-mark"
+            priority
+          />
+
           <div className="areas-block">
             <p className="areas-label mono">Covering</p>
             <div className="areas-marquee" aria-hidden="true">
