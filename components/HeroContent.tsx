@@ -32,7 +32,10 @@ export default function HeroContent() {
       <div className="form-section" id="search-form">
         <ModeToggle mode={mode} onChange={setMode} />
         <p className="members-benefit mono">
-          ✦ Founding Members get wishlist access &amp; community reviews
+          <svg className="benefit-spark" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+            <path d="M5 0 L6.1 3.9 L10 5 L6.1 6.1 L5 10 L3.9 6.1 L0 5 L3.9 3.9 Z" fill="currentColor" />
+          </svg>
+          {' '}Founding Members get wishlist access &amp; community reviews
         </p>
         <SearchForm mode={mode} />
       </div>

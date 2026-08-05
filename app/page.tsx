@@ -13,6 +13,7 @@ import HowItWorks from '@/components/HowItWorks'
 import Reveal from '@/components/Reveal'
 import StickyBar from '@/components/StickyBar'
 import ScrollCue from '@/components/ScrollCue'
+import CellarShelf from '@/components/CellarShelf'
 
 // Areas covered — scrolls as a marquee in the hero. Mirrors the service-area list.
 const AREAS_CAROUSEL = [
@@ -28,7 +29,25 @@ export default function Home() {
       <main>
         {/* ── Hero ─────────────────────────────────────────────────────── */}
         <section className="hero" id="search-anchor">
-          <p className="hero-eyebrow mono">Ludhiana · Members Only</p>
+          {/* Etched crest watermark — engraved bottle + rocks glass in a hairline
+              ring on the hero's right flank. Decorative, desktop only (CSS). */}
+          <div className="hero-etch" aria-hidden="true">
+            <svg viewBox="0 0 340 460" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="170" cy="235" r="150" stroke="#D2A74F" strokeWidth="1.2" opacity="0.5" />
+              <circle cx="170" cy="235" r="141" stroke="#D2A74F" strokeWidth="0.8" opacity="0.3" />
+              <path
+                d="M138 118 H182 V140 H176 V176 L204 214 V370 Q204 382 192 382 H128 Q116 382 116 370 V214 L144 176 V140 H138 Z"
+                stroke="#D2A74F" strokeWidth="1.4" strokeLinejoin="round"
+              />
+              <path d="M124 300 L196 282 M124 314 L196 296" stroke="#D2A74F" strokeWidth="1.1" opacity="0.7" />
+              <path
+                d="M222 320 H286 L281 384 Q281 390 275 390 H233 Q227 390 227 384 Z"
+                stroke="#D2A74F" strokeWidth="1.4" strokeLinejoin="round"
+              />
+              <path d="M228 352 H280" stroke="#D2A74F" strokeWidth="1.1" opacity="0.7" />
+              <path d="M108 396 H294" stroke="#D2A74F" strokeWidth="1" opacity="0.4" />
+            </svg>
+          </div>
 
           <div className="launch-strip">
             <span className="launch-dot" />
@@ -84,6 +103,9 @@ export default function Home() {
         <Reveal>
           <FAQSection />
         </Reveal>
+
+        {/* ── Cellar shelf — engraved closing image, draws in on scroll ── */}
+        <CellarShelf />
       </main>
 
       {/* ── Footer ───────────────────────────────────────────────────── */}

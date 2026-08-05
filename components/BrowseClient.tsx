@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Product } from './BrowseSection'
+import CategoryGlyph from './CategoryGlyph'
 
 type Props = {
   grouped:    Record<string, Product[]>
@@ -50,6 +51,7 @@ export default function BrowseClient({ grouped, categories }: Props) {
                 className={`browse-cat-btn mono${activeCategory === cat ? ' active' : ''}`}
                 onClick={() => setActiveCategory(cat)}
               >
+                <CategoryGlyph category={cat} />
                 {cat} ({grouped[cat]?.length ?? 0})
               </button>
             ))}
@@ -57,9 +59,10 @@ export default function BrowseClient({ grouped, categories }: Props) {
 
           {/* Bottle list */}
           <div role="tabpanel" aria-label={`${activeCategory} bottles`}>
-            <ul className="browse-list">
-              {(grouped[activeCategory] ?? []).map(product => (
-                <li key={product.id}>
+            {/* key re-mounts the list on category switch so the row stagger replays */}
+            <ul className="browse-list" key={activeCategory}>
+              {(grouped[activeCategory] ?? []).map((product, i) => (
+                <li key={product.id} style={{ '--i': Math.min(i, 12) } as React.CSSProperties}>
                   <button
                     className="browse-item"
                     onClick={() => handleBottleClick(product.name)}
@@ -75,7 +78,7 @@ export default function BrowseClient({ grouped, categories }: Props) {
 
           <p className="browse-hint mono">
             Tap any bottle to pre-fill your search above.
-            Availability is confirmed in real time — not guaranteed.
+            Availability is confirmed in real time, not guaranteed.
           </p>
         </div>
       </div>

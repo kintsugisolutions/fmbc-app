@@ -1,6 +1,17 @@
 'use client'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion, type Variants } from 'framer-motion'
 import WhatsAppMark from './WhatsAppMark'
+
+// The conversation reveals in chat order when scrolled into view — the section's
+// job is to show the flow, so sequence is the message. Static under reduced motion.
+const convo: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.35 } },
+}
+const msg: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: 'easeOut' } },
+}
 
 // The WhatsApp preview phone, gently floating on a 6s loop with a faint Y-axis
 // rotation so it reads as a 3D object hovering above the page. Hover tips it
@@ -29,9 +40,15 @@ export default function WAPhone() {
         </div>
 
         {/* Chat body */}
-        <div className="wa-body">
+        <motion.div
+          className="wa-body"
+          variants={convo}
+          initial={reduced ? false : 'hidden'}
+          whileInView={reduced ? undefined : 'visible'}
+          viewport={{ once: true, amount: 0.5 }}
+        >
           {/* Outgoing search request */}
-          <div className="wa-msg wa-msg-out">
+          <motion.div className="wa-msg wa-msg-out" variants={msg}>
             <p className="wa-msg-text">Looking for Glenfiddich 12 in Model Town</p>
             <span className="wa-time mono">4:32 PM
               <svg width="14" height="9" viewBox="0 0 14 9" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style={{display:'inline-block',marginLeft:'4px',verticalAlign:'middle'}}>
@@ -39,10 +56,10 @@ export default function WAPhone() {
                 <path d="M5 4.5l3 3 5-6" stroke="#53BDEB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </span>
-          </div>
+          </motion.div>
 
           {/* Incoming confirmation */}
-          <div className="wa-msg wa-msg-in">
+          <motion.div className="wa-msg wa-msg-in" variants={msg}>
             <p className="wa-msg-text">
               ✅ <strong>Found: Glenfiddich 12 Year</strong><br/>
               📍 Sarabha Nagar Wine Shop<br/>
@@ -50,21 +67,21 @@ export default function WAPhone() {
               🕙 Open till 10 PM tonight
             </p>
             <span className="wa-time mono">4:48 PM</span>
-          </div>
+          </motion.div>
 
           {/* Follow-up note */}
-          <div className="wa-msg wa-msg-in">
+          <motion.div className="wa-msg wa-msg-in" variants={msg}>
             <p className="wa-msg-text">
               Stock confirmed for today. Availability may change — we recommend calling ahead before visiting.
             </p>
             <span className="wa-time mono">4:48 PM</span>
-          </div>
+          </motion.div>
 
           {/* Typing indicator */}
-          <div className="wa-typing" aria-label="FMBC is checking availability">
+          <motion.div className="wa-typing" aria-label="FMBC is checking availability" variants={msg}>
             <span /><span /><span />
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </motion.div>
     </div>
   )

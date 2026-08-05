@@ -24,6 +24,7 @@ function isStandalone(): boolean {
 
 export default function IosInstallPrompt() {
   const [show, setShow] = useState(false)
+  const [exiting, setExiting] = useState(false)
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -50,13 +51,15 @@ export default function IosInstallPrompt() {
 
   function dismiss() {
     try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* ignore */ }
-    setShow(false)
+    // Exit down the way it arrived (symmetric path), then unmount
+    setExiting(true)
+    window.setTimeout(() => setShow(false), 220)
   }
 
   if (!show) return null
 
   return (
-    <div className="ios-prompt" role="dialog" aria-label="Add FMBC to your Home Screen">
+    <div className={`ios-prompt${exiting ? ' ios-prompt--exit' : ''}`} role="dialog" aria-label="Add FMBC to your Home Screen">
       <button className="ios-prompt-close" onClick={dismiss} aria-label="Dismiss">×</button>
       <p className="ios-prompt-eyebrow mono">Faster access</p>
       <p className="ios-prompt-title">Keep FMBC on your Home Screen</p>
@@ -67,7 +70,7 @@ export default function IosInstallPrompt() {
           <path d="M2 8v7.5A1.5 1.5 0 003.5 17h8a1.5 1.5 0 001.5-1.5V8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
         </svg>{' '}
         <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
-        Opens like an app — straight to search.
+        Opens like an app, straight to search.
       </p>
       <button className="ios-prompt-dismiss mono" onClick={dismiss}>Got it</button>
     </div>

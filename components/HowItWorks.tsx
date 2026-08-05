@@ -52,7 +52,6 @@ export default function HowItWorks() {
   return (
     <section className="how-section">
       <div className="container">
-        <p className="section-eyebrow mono">How it works</p>
         <h2 className="section-title">Three steps. One WhatsApp.</h2>
 
         <motion.div
@@ -64,7 +63,7 @@ export default function HowItWorks() {
         >
           <motion.div className="step" variants={stepVariant}>
             <p className="step-num mono">01</p>
-            <div className="step-icon">
+            <div className="step-medallion">
               <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="14" cy="14" r="8.5" stroke="#D2A74F" strokeWidth="1.5"/>
                 <path d="M20.5 20.5L27 27" stroke="#D2A74F" strokeWidth="1.5" strokeLinecap="round"/>
@@ -78,7 +77,7 @@ export default function HowItWorks() {
 
           <motion.div className="step" variants={stepVariant}>
             <p className="step-num mono">02</p>
-            <div className="step-icon">
+            <div className="step-medallion">
               <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M16 5C9.925 5 5 9.477 5 15c0 2.013.618 3.882 1.681 5.438L5 27l6.738-1.663A11.1 11.1 0 0016 27c6.075 0 11-4.477 11-10S22.075 5 16 5z" stroke="#D2A74F" strokeWidth="1.5" strokeLinejoin="round"/>
                 <path d="M11 15h.01M16 15h.01M21 15h.01" stroke="#D2A74F" strokeWidth="2" strokeLinecap="round"/>
@@ -92,7 +91,7 @@ export default function HowItWorks() {
 
           <motion.div className="step" variants={stepVariant}>
             <p className="step-num mono">03</p>
-            <div className="step-icon">
+            <div className="step-medallion">
               <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M16 5a7 7 0 00-7 7v5l-2 3h18l-2-3v-5a7 7 0 00-7-7z" stroke="#D2A74F" strokeWidth="1.5" strokeLinejoin="round"/>
                 <path d="M13.5 24a2.5 2.5 0 005 0" stroke="#D2A74F" strokeWidth="1.5" strokeLinecap="round"/>

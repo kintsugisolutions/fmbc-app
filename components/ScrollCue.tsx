@@ -52,7 +52,7 @@ export default function ScrollCue({ targetId = 'search-form' }: { targetId?: str
 
   return (
     <button type="button" className="scroll-cue" onClick={handleClick} aria-label="Scroll to the search form">
-      <span className="scroll-cue-text mono">Search Now</span>
+      <span className="scroll-cue-text mono">Search a bottle</span>
       <svg className="scroll-cue-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>

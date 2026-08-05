@@ -85,7 +85,7 @@ function TimeoutOverlay({ canRetry, onRetry, onReset }: {
         </div>
         <h2 className="success-title">Taking longer than usual…</h2>
         <p className="success-sub">
-          Our network is slow to respond right now. Your details are safe — nothing
+          Our network is slow to respond right now. Your details are safe; nothing
           was submitted twice.
         </p>
         {canRetry ? (
@@ -119,7 +119,7 @@ function SuccessOverlay({ product, area, mode, onClose }: {
         <p className="success-product mono">{product}</p>
         <p className="success-sub">
           We are checking {mode === 'buy' ? 'stores' : 'venues'} in <strong>{area}</strong> right now.
-          <br />Expect a WhatsApp from us — typically within the hour.
+          <br />Expect a WhatsApp from us, typically within the hour.
         </p>
         <p className="success-watchlist">
           If nothing is available today, you are automatically added to the watchlist. We alert you the moment it surfaces.
