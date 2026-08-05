@@ -20,7 +20,15 @@ a { color: var(--gold); text-decoration: none; }
 .nav-brand { font-family:var(--font-mono); font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--gold-l); }
 .nav-badge { font-family:var(--font-mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:3px 8px; }
 .hero { padding:80px 24px 60px; text-align:center; border-bottom:1px solid var(--bdr); }
-.hero-mark { display:block; margin:28px auto 24px; height:auto; filter:drop-shadow(0 6px 16px rgba(210,167,79,0.18)); }
+.hero-mark-btn {
+  display:block; width:fit-content; margin:28px auto 24px; padding:6px;
+  border:none; background:none; cursor:pointer; line-height:0; border-radius:12px;
+  -webkit-tap-highlight-color:transparent;
+  transition:filter 0.18s ease;
+}
+.hero-mark-btn:hover { filter:brightness(1.08); }
+.hero-mark-btn:focus-visible { outline:2px solid var(--gold); outline-offset:4px; }
+.hero-mark { display:block; height:auto; filter:drop-shadow(0 6px 16px rgba(210,167,79,0.18)); }
 .hero-title { font-size:clamp(40px,7.6vw,70px); color:var(--ivory); line-height:1.12; margin-bottom:20px; }
 .hero-title-accent { color:var(--gold); font-style:italic; }
 /* Mask-reveal wrapper: each line rises into view from behind this clipping edge */
@@ -125,13 +133,6 @@ a { color: var(--gold); text-decoration: none; }
 .browse-toggle:hover .browse-toggle-label { color:var(--gold); }
 .browse-toggle-icon { font-size:20px; color:var(--gold); line-height:1; font-family:var(--font-mono); transition:transform 0.2s; }
 .browse-toggle:hover .browse-toggle-icon { transform:scale(1.2); }
-.browse-body-wrap {
-  display:grid;
-  grid-template-rows:0fr;
-  transition:grid-template-rows 0.3s ease;
-}
-.browse-body-wrap--open { grid-template-rows:1fr; }
-.browse-body-wrap > .browse-body { overflow:hidden; min-height:0; }
 .browse-body { padding:20px 28px 28px; }
 .browse-cats { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
 .browse-cat-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; background:transparent; border:1px solid var(--bdr); border-radius:20px; color:var(--muted); font-family:var(--font-mono); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; transition:border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, background 0.2s; }
@@ -695,6 +696,11 @@ html[data-fmbc-verified] .age-gate-overlay:not(.age-gate-overlay--exit) { displa
   filter:drop-shadow(0 6px 16px rgba(210,167,79,0.18));
 }
 .search-mark-svg { display:inline-flex; align-items:flex-end; justify-content:center; position:relative; }
+.search-mark-tap {
+  display:block; padding:4px; margin:0; border:none; background:none;
+  cursor:pointer; border-radius:8px; -webkit-tap-highlight-color:transparent;
+}
+.search-mark-tap:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
 /* Zero-size landing anchor for SearchPin; left is set per-silhouette inline */
 .search-mark-aim { position:absolute; top:0; width:1px; height:1px; transform:translateX(-50%); pointer-events:none; }
 .search-mark-base {

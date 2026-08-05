@@ -1,5 +1,18 @@
 'use client'
-import { motion, useReducedMotion } from 'framer-motion'
+import { useState } from 'react'
+import { motion, useReducedMotion, type Variants } from 'framer-motion'
+
+// Click reaction — a nudge wobble (rocking on the base, not spinning) plus a
+// brief brighten, like catching the light when tapped. Re-keyed per click so
+// a rapid second tap restarts cleanly rather than fighting the first.
+const wobbleVariants: Variants = {
+  rest: { rotate: 0, filter: 'brightness(1)' },
+  wobble: {
+    rotate: [0, -7, 5, -3, 0],
+    filter: ['brightness(1)', 'brightness(1.35)', 'brightness(1.1)', 'brightness(1)'],
+    transition: { duration: 0.6, ease: 'easeOut' },
+  },
+}
 
 // The static destination mark under the search section that SearchPin lands on.
 // Buy mode → a Johnnie Walker-style square bottle (slanted label). Find-a-bar mode
@@ -43,9 +56,10 @@ function MugSilhouette() {
 export default function SearchMark({ mode }: { mode: 'buy' | 'drink' }) {
   const reduced = useReducedMotion()
   const isMug = mode === 'drink'
+  const [nudgeKey, setNudgeKey] = useState(0)
 
   return (
-    <div className="search-mark" id="search-mark" aria-hidden="true">
+    <div className="search-mark" id="search-mark">
       <motion.div
         key={mode}
         className="search-mark-svg"
@@ -53,7 +67,20 @@ export default function SearchMark({ mode }: { mode: 'buy' | 'drink' }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
       >
-        {isMug ? <MugSilhouette /> : <BottleSilhouette />}
+        <motion.button
+          key={`nudge-${nudgeKey}`}
+          type="button"
+          className="search-mark-tap"
+          aria-label={isMug ? 'Beer mug' : 'Bottle'}
+          onClick={() => setNudgeKey(k => k + 1)}
+          style={{ transformOrigin: 'bottom center' }}
+          variants={reduced ? undefined : wobbleVariants}
+          initial="rest"
+          animate={reduced || nudgeKey === 0 ? 'rest' : 'wobble'}
+          whileTap={reduced ? undefined : { scale: 0.92 }}
+        >
+          {isMug ? <MugSilhouette /> : <BottleSilhouette />}
+        </motion.button>
         {/* Exact landing point for SearchPin — top-centre of the silhouette. The
             mug's mouth sits left of its SVG centre (the handle pulls the box right),
             so it aims at 45% of the SVG width; the bottle is symmetric at 50%. */}

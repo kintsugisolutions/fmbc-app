@@ -18,34 +18,75 @@ export default function SearchPin() {
 
   useEffect(() => {
     if (reduced) return
-    const onPin = (e: Event) => {
-      // Aim at the explicit landing anchor SearchMark places at the silhouette's
-      // top-centre, not the full-width wrapper — keeps the tip on the cap/mouth
-      // regardless of the silhouette's asymmetry or container padding.
+    let rafId = 0
+
+    // Reads the aim anchor's position fresh — called every frame during travel
+    // rather than once at dispatch time. The pin's ~0.7s flight is long enough
+    // for the page to reflow underneath it (a validation message clearing, the
+    // field ticks appearing, a sticky bar toggling — all common on mobile,
+    // where this drift was landing the pin off the bottle). Tracking the live
+    // target instead of a stale snapshot means the pin always self-corrects
+    // onto wherever the bottle actually is by the time it arrives.
+    function readTarget() {
       const aim = document.getElementById('search-mark-aim')
-      if (!aim) return
+      if (!aim) return null
       const br = aim.getBoundingClientRect()
-      const targetX = br.left + br.width / 2
-      const targetY = br.top - 8                 // just above the cap
+      return { x: br.left + br.width / 2, y: br.top - 8 } // just above the cap
+    }
+
+    const onPin = (e: Event) => {
+      cancelAnimationFrame(rafId)
+      const readInitial = readTarget()
+      if (!readInitial) return
+      const initialTarget: { x: number; y: number } = readInitial
 
       const detail = (e as CustomEvent).detail || {}
-      const startX = typeof detail.x === 'number' ? detail.x : targetX
-      const startY = typeof detail.y === 'number' ? detail.y : targetY - 130
+      const startX = typeof detail.x === 'number' ? detail.x : initialTarget.x
+      const startY = typeof detail.y === 'number' ? detail.y : initialTarget.y - 130
 
       x.set(startX); y.set(startY); scale.set(0); opacity.set(1)
       // pop out
       animate(scale, [0, 1.3, 1], { duration: 0.42, ease: 'easeOut' })
-      // travel to the bottle, with a small landing bounce on Y
-      animate(x, targetX, { duration: 0.72, ease: [0.4, 0, 0.2, 1] })
-      animate(y, [startY, targetY + 12, targetY], { duration: 0.72, ease: 'easeInOut' }).then(() => {
-        setRingKey(k => k + 1)
-        animate(scale, [1, 1.18, 0.94, 1], { duration: 0.4, ease: 'easeOut' })
-      })
+
+      // Travel phase: ease x/y toward the live target every frame (exponential
+      // smoothing, frame-rate independent) instead of animating once to a
+      // fixed value. ~0.72s total, matching the previous choreography.
+      const travelStart = performance.now()
+      const travelDuration = 720
+      let landed = false
+
+      function tick(now: number) {
+        const elapsed = now - travelStart
+        const t = Math.min(elapsed / travelDuration, 1)
+        const target = readTarget() ?? initialTarget
+
+        // Smoothing factor ramps up over the flight so it starts with real
+        // travel motion (not an instant snap) and tightens onto the target
+        // as it approaches, so a late layout shift still gets fully corrected.
+        const smoothing = 0.06 + t * 0.22
+        x.set(x.get() + (target.x - x.get()) * smoothing)
+        y.set(y.get() + (target.y - y.get()) * smoothing)
+
+        if (t < 1) {
+          rafId = requestAnimationFrame(tick)
+        } else if (!landed) {
+          landed = true
+          // Snap fully onto the final live target and play the landing bounce.
+          x.set(target.x); y.set(target.y)
+          setRingKey(k => k + 1)
+          animate(scale, [1, 1.18, 0.94, 1], { duration: 0.4, ease: 'easeOut' })
+        }
+      }
+      rafId = requestAnimationFrame(tick)
+
       // linger, then fade out
       animate(opacity, 0, { duration: 0.5, delay: 2 })
     }
     window.addEventListener('fmbc:search-pin', onPin as EventListener)
-    return () => window.removeEventListener('fmbc:search-pin', onPin as EventListener)
+    return () => {
+      window.removeEventListener('fmbc:search-pin', onPin as EventListener)
+      cancelAnimationFrame(rafId)
+    }
   }, [reduced, x, y, scale, opacity])
 
   if (reduced) return null
