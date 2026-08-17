@@ -10,19 +10,10 @@ import { createAdminClient } from '@/lib/supabase-admin'
 // (app/api/cron/nightly-review/route.ts) only writes to review_runs, a log
 // table, and never touches `products`. Every is_available flip below happens
 // because a person clicked Approve in the dashboard.
+//
+// Note: CATEGORY_OPTIONS lives in ./constants.ts, not here — a 'use server' file
+// can only export async functions, so a plain array export breaks the build.
 // ─────────────────────────────────────────────────────────────────────────────
-
-export const CATEGORY_OPTIONS = [
-  'Whisky',
-  'Gin',
-  'Vodka',
-  'Rum',
-  'Beer',
-  'Brandy',
-  'Tequila',
-  'Wine',
-  'Cocktail',
-] as const
 
 export async function approveProduct(formData: FormData) {
   const id = String(formData.get('id') ?? '')

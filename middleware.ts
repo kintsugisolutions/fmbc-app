@@ -22,12 +22,12 @@ import { isValidSessionCookie, COOKIE_NAME } from '@/lib/internal-auth'
 // at /internal/login succeeds. Added 2026-08-17 — see app/internal/.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname.startsWith('/internal') && pathname !== '/internal/login') {
     const session = request.cookies.get(COOKIE_NAME)?.value
-    if (!isValidSessionCookie(session)) {
+    if (!(await isValidSessionCookie(session))) {
       const loginUrl = new URL('/internal/login', request.url)
       return NextResponse.redirect(loginUrl)
     }

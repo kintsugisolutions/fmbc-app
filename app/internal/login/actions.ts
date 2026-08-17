@@ -7,11 +7,11 @@ import { checkPassphrase, makeSessionCookieValue, COOKIE_NAME } from '@/lib/inte
 export async function loginAction(formData: FormData) {
   const passphrase = String(formData.get('passphrase') ?? '')
 
-  if (!checkPassphrase(passphrase)) {
+  if (!(await checkPassphrase(passphrase))) {
     redirect('/internal/login?error=1')
   }
 
-  const token = makeSessionCookieValue()
+  const token = await makeSessionCookieValue()
   if (!token) {
     // INTERNAL_DASHBOARD_SECRET missing — fail closed rather than let anyone in.
     redirect('/internal/login?error=1')

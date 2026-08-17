@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase-admin'
 import { groupForReview, type UnreviewedProduct } from '@/lib/normalize-sku'
-import { approveProduct, rejectProduct, markQueueSeen, CATEGORY_OPTIONS } from './actions'
+import { approveProduct, rejectProduct, markQueueSeen } from './actions'
+import { CATEGORY_OPTIONS } from './constants'
 import { logoutAction } from '../login/actions'
 
 export const dynamic = 'force-dynamic' // always fresh — this is an internal ops dashboard, no caching
