@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { requireInternalSession } from '@/lib/internal-session'
+import { CATEGORY_OPTIONS } from './constants'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hard constraint (explicit user requirement, 2026-08-17): the products table is
@@ -11,17 +13,45 @@ import { createAdminClient } from '@/lib/supabase-admin'
 // table, and never touches `products`. Every is_available flip below happens
 // because a person clicked Approve in the dashboard.
 //
+// SECURITY (2026-08-17): every action below starts with requireInternalSession().
+// Do not remove it and do not rely on middleware.ts alone — Server Actions are
+// reachable by POSTing an action ID to ANY route, including public ones, so the
+// pathname-based middleware gate does not cover them. See lib/internal-session.ts.
+//
 // Note: CATEGORY_OPTIONS lives in ./constants.ts, not here — a 'use server' file
 // can only export async functions, so a plain array export breaks the build.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Supabase ids are uuids; reject anything else before it reaches a query.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const MAX_NAME_LENGTH = 200
+
 export async function approveProduct(formData: FormData) {
+  await requireInternalSession()
+
   const id = String(formData.get('id') ?? '')
   const category = String(formData.get('category') ?? '')
   const correctedName = String(formData.get('name') ?? '').trim()
   const mergeIdsRaw = String(formData.get('mergeIds') ?? '') // comma-separated sibling ids to fold in
 
-  if (!id || !category) return
+  if (!UUID_RE.test(id)) {
+    console.error('approveProduct: rejected malformed id')
+    return
+  }
+
+  // Category must be one of the known options — this column has no DB-level
+  // enum, so this is the only thing stopping arbitrary text landing in the
+  // public catalog's category field.
+  if (!(CATEGORY_OPTIONS as readonly string[]).includes(category)) {
+    console.error(`approveProduct: rejected unknown category ${JSON.stringify(category)}`)
+    return
+  }
+
+  if (correctedName.length > MAX_NAME_LENGTH) {
+    console.error('approveProduct: rejected over-long name')
+    return
+  }
 
   const supabase = createAdminClient()
 
@@ -38,7 +68,11 @@ export async function approveProduct(formData: FormData) {
     return
   }
 
-  const mergeIds = mergeIdsRaw.split(',').map((s) => s.trim()).filter((s) => s && s !== id)
+  const mergeIds = mergeIdsRaw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s && s !== id && UUID_RE.test(s))
+
   if (mergeIds.length > 0) {
     const { error: mergeErr } = await supabase
       .from('products')
@@ -53,8 +87,13 @@ export async function approveProduct(formData: FormData) {
 }
 
 export async function rejectProduct(formData: FormData) {
+  await requireInternalSession()
+
   const id = String(formData.get('id') ?? '')
-  if (!id) return
+  if (!UUID_RE.test(id)) {
+    console.error('rejectProduct: rejected malformed id')
+    return
+  }
 
   const supabase = createAdminClient()
   // is_available stays false — this just marks it reviewed-and-dismissed so it
@@ -77,6 +116,8 @@ export async function rejectProduct(formData: FormData) {
 // looked over the current queue. Does not touch products at all, only the
 // dashboard_checkpoints watermark.
 export async function markQueueSeen() {
+  await requireInternalSession()
+
   const supabase = createAdminClient()
   const { error } = await supabase
     .from('dashboard_checkpoints')

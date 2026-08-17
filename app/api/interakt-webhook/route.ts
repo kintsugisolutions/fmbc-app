@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyInteraktSignature, sendWhatsAppTemplate } from '@/lib/interakt'
+import { classifyVenueReply } from '@/lib/reply-classifier'
 import {
   findPendingQueryByVenuePhone,
   recordVenueReply,
@@ -96,23 +97,15 @@ async function handleIncomingMessage(payload: any) {
     return
   }
 
-  const reply = messageText.trim().toLowerCase()
   const repliedAt = receivedAt ? new Date(receivedAt).toISOString() : new Date().toISOString()
 
-  // Deliberately simple keyword matching, not NLP — matches the "1 = Yes,
-  // 2 = No" convention the outbound template asks stores to use, plus a
-  // couple of obvious plain-English variants. Anything else is logged
-  // as-is under 'Replied' for manual review rather than guessed at — a
-  // wrong auto-classification here (marking "no" as "yes") is worse than
-  // leaving it for a human to check.
-  let status: 'Available' | 'Not Available' | 'Replied'
-  if (reply === '1' || reply.includes('yes') || reply.includes('available')) {
-    status = 'Available'
-  } else if (reply === '2' || reply.includes('no')) {
-    status = 'Not Available'
-  } else {
-    status = 'Replied'
-  }
+  // Classification lives in lib/reply-classifier.ts — see the header comment
+  // there for why this is not a one-line `includes()` check. In short: the
+  // previous version matched the substring "available" inside "not available"
+  // and published false stock confirmations. Anything ambiguous (mixed
+  // signals, unrecognised phrasing) comes back as 'Replied' and waits for a
+  // human rather than being guessed at.
+  const status = classifyVenueReply(messageText)
 
   await recordVenueReply({
     venueQueryId: context.venueQueryId,
@@ -120,6 +113,16 @@ async function handleIncomingMessage(payload: any) {
     rawReplyText: messageText,
     repliedAt,
   })
+
+  if (status === 'Replied') {
+    // Worth surfacing: a reply we couldn't read is a reply that will sit
+    // unresolved unless someone looks. If these become common, the outbound
+    // template wording (or the classifier's vocabulary) needs work.
+    console.warn(
+      `Interakt: unclassified reply from venue ${context.venueName} ` +
+      `(venue_query ${context.venueQueryId}): ${JSON.stringify(messageText)}`
+    )
+  }
 
   if (status !== 'Available') return
 

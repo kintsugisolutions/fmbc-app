@@ -5,7 +5,10 @@ import { isValidSessionCookie, COOKIE_NAME } from '@/lib/internal-auth'
 // ─── Nonce-based Content Security Policy ──────────────────────────────────────
 // Generates a cryptographically random nonce per request and injects it into:
 //   1. The CSP response header (script-src 'nonce-<value>')
-//   2. The x-nonce request header (forwarded to app/layout.tsx via next/headers)
+//   2. The x-nonce request header (read by app/layout.tsx via next/headers)
+//   3. The CSP *request* header — this is how Next.js itself discovers the
+//      nonce for the inline scripts IT renders (the flight-data
+//      `self.__next_f.push(...)` blocks). See the note below.
 //
 // This replaces the static `'unsafe-inline'` in script-src, which previously
 // allowed ANY inline script to execute. With a nonce, only scripts that carry the
@@ -14,12 +17,27 @@ import { isValidSessionCookie, COOKIE_NAME } from '@/lib/internal-auth'
 // 'unsafe-eval' is kept in development only (Next.js HMR requires it).
 // 'unsafe-inline' is retained for style-src only — Next.js injects too many inline
 // styles to remove it without a dedicated style nonce pass (future work).
+//
+// ⚠️  FIX 2026-08-17: the CSP was previously set only on the *response*. Next.js
+// reads the `content-security-policy` header off the **request** to find the
+// nonce it should stamp on its own inline bootstrap scripts. Without it those
+// scripts rendered unnonced while the response CSP forbade inline scripts — so
+// in a production build the browser blocked Next's flight data, the RSC payload
+// never arrived, and pages silently failed to hydrate (the search form would
+// render but do nothing). Setting it on requestHeaders below is the documented
+// fix. Verify any change here against a PRODUCTION build with the console open —
+// dev mode allows 'unsafe-eval' and behaves differently.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── /internal auth gate ────────────────────────────────────────────────────
 // Everything under /internal (the private usage/traffic dashboard + review
 // queue) requires a valid session cookie, set only after the passphrase form
 // at /internal/login succeeds. Added 2026-08-17 — see app/internal/.
+//
+// NOTE: this gate is defence in depth, NOT the primary control. It matches on
+// pathname, and Next.js Server Actions execute on a POST to any route carrying
+// the action ID — so it does not protect the mutating actions. Those call
+// requireInternalSession() themselves; see lib/internal-session.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function middleware(request: NextRequest) {
@@ -46,13 +64,15 @@ export async function middleware(request: NextRequest) {
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
+    "object-src 'none'",
   ].join('; ')
 
-  // Forward nonce to layout.tsx via a request header.
-  // app/layout.tsx reads this with headers().get('x-nonce') and applies it to
-  // every dangerouslySetInnerHTML <script> block.
+  // Forward the nonce to layout.tsx (x-nonce) AND the full CSP to Next.js
+  // itself (content-security-policy) — see the header comment for why both
+  // are required.
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-nonce', nonce)
+  requestHeaders.set('content-security-policy', csp)
 
   const response = NextResponse.next({
     request: { headers: requestHeaders },

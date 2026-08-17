@@ -3,11 +3,21 @@ import { loginAction } from './actions'
 // Passphrase gate for /internal — no username, single shared secret
 // (INTERNAL_DASHBOARD_SECRET). This page itself is excluded from the
 // middleware's auth check (see middleware.ts) so it's always reachable.
+const ERROR_MESSAGES: Record<string, string> = {
+  '1': 'Wrong passphrase — try again.',
+  rate: 'Too many attempts. Wait 15 minutes and try again.',
+  config: 'Login is unavailable: server is missing required configuration. Check Vercel env vars.',
+}
+
 export default function InternalLoginPage({
   searchParams,
 }: {
   searchParams: { error?: string }
 }) {
+  const errorMessage = searchParams?.error
+    ? ERROR_MESSAGES[searchParams.error] ?? ERROR_MESSAGES['1']
+    : null
+
   return (
     <div
       style={{
@@ -52,8 +62,8 @@ export default function InternalLoginPage({
             fontFamily: 'inherit',
           }}
         />
-        {searchParams?.error && (
-          <p style={{ color: '#e08585', fontSize: 12, margin: 0 }}>Wrong passphrase — try again.</p>
+        {errorMessage && (
+          <p style={{ color: '#e08585', fontSize: 12, margin: 0, lineHeight: 1.5 }}>{errorMessage}</p>
         )}
         <button
           type="submit"
