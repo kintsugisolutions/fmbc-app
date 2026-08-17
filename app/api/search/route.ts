@@ -26,7 +26,7 @@ if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) 
 }
 
 // Server-side area whitelist — must mirror AREAS in components/SearchForm.tsx.
-// Prevents arbitrary strings being forwarded into the n8n → WhatsApp pipeline.
+// Prevents arbitrary strings being forwarded into the venue-matching pipeline.
 const ALLOWED_AREAS = [
   'Anywhere in Ludhiana',
   'Model Town', 'BRS Nagar', 'Civil Lines', 'Sarabha Nagar',
@@ -34,7 +34,7 @@ const ALLOWED_AREAS = [
   'Haibowal', 'Raikot Road', 'Other',
 ]
 
-// Strip HTML tags from any string field before forwarding to n8n
+// Strip HTML tags from any string field before it reaches Supabase/Interakt.
 function sanitise(s: string): string {
   return s.replace(/<[^>]*>/g, '').trim().slice(0, 200)
 }
@@ -114,66 +114,9 @@ export async function POST(req: NextRequest) {
 
     const cleanProduct = sanitise(product)
 
-    // ── NOTIFY_MODE switch ──────────────────────────────────────────────────
-    // "n8n" (default, unchanged behaviour) forwards to the n8n webhook as before.
-    // "direct" is the Plan B path: Next.js talks to Supabase (venues, product
-    // matching, search/audit logging — see lib/search-loop.ts) + Interakt
-    // itself, with no n8n workspace and no Airtable in the loop at all. Added
-    // after the n8n Cloud workspace was deleted (free trial lapsed, no
-    // workflow backup existed) — see git history on this file for context.
-    // As of 2026-08-17, Airtable was fully removed from this path (it
-    // previously backed venue lookup + product matching here); the venues,
-    // user_searches, and venue_queries tables now live in Supabase instead.
-    // Sehaj is rebuilding the n8n workflow as the primary path; this exists
-    // as a tested fallback in case that workspace has problems again, and can
-    // be flipped on by setting NOTIFY_MODE=direct in Vercel without a code change.
-    const notifyMode = process.env.NOTIFY_MODE === 'direct' ? 'direct' : 'n8n'
-
-    if (notifyMode === 'direct') {
-      const result = await handleDirectNotify({ product: cleanProduct, area, phone, searchType })
-      if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: result.status })
-      }
-    } else {
-      const webhookUrl = process.env.N8N_WEBHOOK_URL
-      if (!webhookUrl) {
-        console.error('N8N_WEBHOOK_URL is not set')
-        return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
-      }
-
-      // ── n8n webhook secret ──────────────────────────────────────────────────
-      // X-FMBC-Secret prevents anyone who discovers the webhook URL from bypassing
-      // the Next.js rate limiter and spamming n8n directly.
-      // Mandatory — the route refuses to forward without it. Set N8N_WEBHOOK_SECRET
-      // in .env.local and Vercel env vars, then validate this header in your n8n
-      // webhook node's "Header Auth" settings.
-      const webhookSecret = process.env.N8N_WEBHOOK_SECRET
-      if (!webhookSecret) {
-        console.error('N8N_WEBHOOK_SECRET is not configured — refusing to forward to n8n')
-        return NextResponse.json({ error: 'Service unavailable' }, { status: 503 })
-      }
-      const webhookHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-FMBC-Secret': webhookSecret,
-      }
-
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: webhookHeaders,
-        body: JSON.stringify({
-          product:    cleanProduct,
-          area,
-          phone:      `91${phone}`,
-          searchType,
-          source:     'web',
-          timestamp:  new Date().toISOString(),
-        }),
-      })
-
-      if (!res.ok) {
-        console.error('n8n webhook error:', res.status)
-        return NextResponse.json({ error: 'Search could not be processed' }, { status: 502 })
-      }
+    const result = await notifyVenues({ product: cleanProduct, area, phone, searchType })
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
     }
 
     // ── Increment search_count in Supabase (fire-and-forget) ─────────────────
@@ -192,22 +135,30 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Maps the UI's compact searchType values to the Airtable "Search Type" choices.
+// Maps the UI's compact searchType values to the storage-layer labels.
 const SEARCH_TYPE_LABEL: Record<string, 'Buy a Bottle' | 'Drink Now'> = {
   buy: 'Buy a Bottle',
   drink: 'Drink Now',
 }
 
 // Max venues notified per search — a ceiling on both Interakt cost and
-// store-message-fatigue, independent of how many venues Airtable returns.
+// store-message-fatigue, independent of how many Supabase returns.
 const MAX_VENUES_TO_NOTIFY = 5
 
 const INTERAKT_TEMPLATE_NAME = process.env.INTERAKT_TEMPLATE_NAME || 'search_received'
 
-// The "direct" NOTIFY_MODE path: Supabase venue lookup + Interakt send +
-// Supabase audit trail, with no n8n workspace and no Airtable involved at
-// any step.
-async function handleDirectNotify(input: {
+// The entire outbound half of the search -> WhatsApp loop: Supabase venue
+// lookup + product matching + Interakt send + Supabase audit trail.
+//
+// n8n was fully retired 2026-08-17 (it used to own this whole function, then
+// venue/product lookup moved to Airtable->Supabase on this date, and this is
+// the point where the Interakt send itself moved in-house too — there is no
+// external workflow engine anywhere in this path anymore, by design: fewer
+// hops between "user searched" and "store got pinged" means fewer places for
+// the loop to silently break, which matters because store response rate is
+// FMBC's north-star metric). The other half — receiving a store's reply —
+// lives in app/api/interakt-webhook/route.ts.
+async function notifyVenues(input: {
   product: string
   area: string
   phone: string
@@ -217,7 +168,7 @@ async function handleDirectNotify(input: {
   if (!searchTypeLabel) {
     // Should be unreachable — the earlier whitelist check already rejects
     // anything outside ['buy', 'drink'] — but fail closed rather than send
-    // an unmapped value into Airtable's Search Type single-select.
+    // an unmapped value into Supabase's status column.
     return { ok: false, error: 'Invalid search type', status: 400 }
   }
 
@@ -225,7 +176,7 @@ async function handleDirectNotify(input: {
   try {
     venues = await getVenuesForArea(input.area, MAX_VENUES_TO_NOTIFY)
   } catch (e) {
-    console.error('handleDirectNotify: Supabase venue lookup failed:', e)
+    console.error('notifyVenues: Supabase venue lookup failed:', e)
     return { ok: false, error: 'Service unavailable', status: 503 }
   }
 
@@ -268,7 +219,7 @@ async function handleDirectNotify(input: {
         input.area,
       ])
       if (!result.success) {
-        console.error(`handleDirectNotify: Interakt send failed for venue ${venue.id}:`, result.error)
+        console.error(`notifyVenues: Interakt send failed for venue ${venue.id}:`, result.error)
       }
       if (userSearchId) {
         await createVenueQuery({
