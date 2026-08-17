@@ -74,14 +74,37 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Rate limit by IP ────────────────────────────────────────────────────
-    if (ratelimit) {
-      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '0.0.0.0'
-      const { success } = await ratelimit.limit(ip)
-      if (!success) {
+    // Two different failure modes, deliberately handled differently:
+    //
+    //   Missing config in production -> FAIL CLOSED (503). This endpoint spends
+    //   real money on every call (a WhatsApp template send to up to 5 venues)
+    //   and pings partner stores. Serving it with no rate limiting at all
+    //   because someone forgot an env var is not an acceptable silent default.
+    //
+    //   Limiter throws at request time -> FAIL OPEN, logged loudly. That means
+    //   Upstash is having a moment; the other guards (age cookie, origin check,
+    //   MAX_VENUES_TO_NOTIFY) still bound the damage per request, and taking
+    //   the core product offline over a transient Redis blip is worse.
+    if (!ratelimit) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('Refusing to serve /api/search: rate limiting is not configured')
         return NextResponse.json(
-          { error: 'Too many requests. Please wait a few minutes and try again.' },
-          { status: 429 }
+          { error: 'Service temporarily unavailable. Please try again shortly.' },
+          { status: 503 }
         )
+      }
+    } else {
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '0.0.0.0'
+      try {
+        const { success } = await ratelimit.limit(ip)
+        if (!success) {
+          return NextResponse.json(
+            { error: 'Too many requests. Please wait a few minutes and try again.' },
+            { status: 429 }
+          )
+        }
+      } catch (e) {
+        console.error('search rate limiter unavailable, allowing this request:', e)
       }
     }
 

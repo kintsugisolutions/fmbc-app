@@ -21,9 +21,19 @@ export async function GET(req: NextRequest) {
   // ── Rate limit by IP ──────────────────────────────────────────────────────
   if (ratelimit) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '0.0.0.0'
-    const { success } = await ratelimit.limit(`products:${ip}`)
-    if (!success) {
-      return NextResponse.json([], { status: 429 })
+    try {
+      const { success } = await ratelimit.limit(`products:${ip}`)
+      if (!success) {
+        return NextResponse.json([], { status: 429 })
+      }
+    } catch (e) {
+      // Upstash unreachable (outage, dead credentials, deleted database).
+      // Degrade to unlimited rather than 500 — this endpoint only serves the
+      // public catalog for search autocomplete, and a broken autocomplete is
+      // a worse outcome than briefly losing scrape protection on data that
+      // is public anyway. Previously this threw and returned 500, which took
+      // the whole search box down whenever Redis was unreachable.
+      console.error('products rate limiter unavailable, allowing request:', e)
     }
   }
 

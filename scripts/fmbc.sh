@@ -11,6 +11,7 @@
 #   fmbc build        full production build (catches what typecheck misses)
 #   fmbc dash         open the live internal dashboard
 #   fmbc local-dash   open the internal dashboard on localhost
+#   fmbc env          pull the real env vars down from Vercel into .env.local
 #   fmbc unlock       clear stale git lock files
 #   fmbc pull         pull latest from GitHub
 #   fmbc status       git status + current branch
@@ -136,6 +137,25 @@ fmbc() {
       open "http://localhost:3000/internal/login"
       ;;
 
+    env)
+      # Local .env.local drifts from Vercel every time a key is rotated, and
+      # the failure is confusing (DNS errors, "Invalid API key") rather than
+      # obvious. This pulls the real values straight from Vercel so local dev
+      # matches production exactly.
+      echo "→ Pulling env vars from Vercel into .env.local"
+      echo "  (a browser window may open the first time, to log in)"
+      echo ""
+      if npx --yes vercel env pull .env.local --environment=production; then
+        echo ""
+        echo "✓ .env.local updated. Restart the dev server: fmbc"
+      else
+        echo ""
+        echo "✗ Pull failed. You can copy the values by hand instead from:"
+        echo "  https://vercel.com/fmbc/fmbc-app/settings/environment-variables"
+        return 1
+      fi
+      ;;
+
     unlock)
       _fmbc_unlock_quiet
       echo "✓ Cleared any stale git lock files."
@@ -161,6 +181,7 @@ fmbc dash         open the LIVE internal dashboard
 fmbc local-dash   open the internal dashboard on localhost
 fmbc status       what's changed, and which branch
 fmbc pull         pull latest from GitHub
+fmbc env          pull real env vars from Vercel into .env.local
 fmbc unlock       clear stale git lock files
 USAGE
       ;;
