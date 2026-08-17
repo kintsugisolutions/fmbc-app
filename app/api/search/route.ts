@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
-import { getVenuesForArea, findMatchingProduct, createUserSearch, createVenueQuery } from '@/lib/airtable'
+import { getVenuesForArea, findMatchingProduct, createUserSearch, createVenueQuery } from '@/lib/search-loop'
 import { sendWhatsAppTemplate } from '@/lib/interakt'
 
 // ─── Rate limiter (Upstash Redis — persistent across Vercel cold starts) ──────
@@ -116,13 +116,17 @@ export async function POST(req: NextRequest) {
 
     // ── NOTIFY_MODE switch ──────────────────────────────────────────────────
     // "n8n" (default, unchanged behaviour) forwards to the n8n webhook as before.
-    // "direct" is the Plan B path: Next.js talks to Airtable + Interakt itself,
-    // with no n8n workspace in the loop at all. Added after the n8n Cloud
-    // workspace was deleted (free trial lapsed, no workflow backup existed) —
-    // see git history on this file for context. Sehaj is rebuilding the n8n
-    // workflow as the primary path; this exists as a tested fallback in case
-    // that workspace has problems again, and can be flipped on by setting
-    // NOTIFY_MODE=direct in Vercel without a code change.
+    // "direct" is the Plan B path: Next.js talks to Supabase (venues, product
+    // matching, search/audit logging — see lib/search-loop.ts) + Interakt
+    // itself, with no n8n workspace and no Airtable in the loop at all. Added
+    // after the n8n Cloud workspace was deleted (free trial lapsed, no
+    // workflow backup existed) — see git history on this file for context.
+    // As of 2026-08-17, Airtable was fully removed from this path (it
+    // previously backed venue lookup + product matching here); the venues,
+    // user_searches, and venue_queries tables now live in Supabase instead.
+    // Sehaj is rebuilding the n8n workflow as the primary path; this exists
+    // as a tested fallback in case that workspace has problems again, and can
+    // be flipped on by setting NOTIFY_MODE=direct in Vercel without a code change.
     const notifyMode = process.env.NOTIFY_MODE === 'direct' ? 'direct' : 'n8n'
 
     if (notifyMode === 'direct') {
@@ -200,8 +204,9 @@ const MAX_VENUES_TO_NOTIFY = 5
 
 const INTERAKT_TEMPLATE_NAME = process.env.INTERAKT_TEMPLATE_NAME || 'search_received'
 
-// The "direct" NOTIFY_MODE path: Airtable venue lookup + Interakt send +
-// Airtable audit trail, with no n8n workspace involved at any step.
+// The "direct" NOTIFY_MODE path: Supabase venue lookup + Interakt send +
+// Supabase audit trail, with no n8n workspace and no Airtable involved at
+// any step.
 async function handleDirectNotify(input: {
   product: string
   area: string
@@ -220,7 +225,7 @@ async function handleDirectNotify(input: {
   try {
     venues = await getVenuesForArea(input.area, MAX_VENUES_TO_NOTIFY)
   } catch (e) {
-    console.error('handleDirectNotify: Airtable venue lookup failed:', e)
+    console.error('handleDirectNotify: Supabase venue lookup failed:', e)
     return { ok: false, error: 'Service unavailable', status: 503 }
   }
 
@@ -251,7 +256,6 @@ async function handleDirectNotify(input: {
     area: input.area,
     status: 'Queries Sent',
     matchedProductId,
-    matchedVenueIds: venues.map((v) => v.id),
   })
 
   // Send to each matched venue. Failures are logged per-venue and don't abort
