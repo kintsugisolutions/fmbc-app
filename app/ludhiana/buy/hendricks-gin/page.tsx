@@ -35,7 +35,7 @@ export default function Page() {
           </div>
           <div className="seo-card">
             <h3>What if it is not available right now?</h3>
-            <p>If our network cannot confirm Hendrick's Gin right now, you are automatically added to the watchlist. The moment any verified store in Ludhiana confirms it is in stock, you will receive a WhatsApp before anyone else is notified.</p>
+            <p>If our network cannot confirm Hendrick's Gin right now, you go on the watchlist for it. For the next 60 days, the moment any verified store in your area confirms it is in stock, you receive one WhatsApp. No reminders, no follow-ups, and nothing at all if it is never confirmed.</p>
           </div>
           <div className="seo-cta">
             <h2>Search for Hendrick's Gin now</h2>

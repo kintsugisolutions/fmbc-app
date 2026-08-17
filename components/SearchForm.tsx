@@ -122,7 +122,7 @@ function SuccessOverlay({ product, area, mode, onClose }: {
           <br />Expect a WhatsApp from us, typically within the hour.
         </p>
         <p className="success-watchlist">
-          If nothing is available today, you are automatically added to the watchlist. We alert you the moment it surfaces.
+          If no store confirms it today, we keep watching for 60 days and send you one WhatsApp the moment a store does.
         </p>
         <button className="success-close" onClick={onClose}>Got it</button>
         <p className="success-hint mono">This message closes automatically</p>

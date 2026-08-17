@@ -99,7 +99,7 @@ export default function HowItWorks() {
               </svg>
             </div>
             <h3 className="step-title">You get notified</h3>
-            <p className="step-desc">A WhatsApp arrives with the store name, area, and contact. If nothing is available, you are on the watchlist.</p>
+            <p className="step-desc">A WhatsApp arrives with the store name, area, and contact. If nothing is confirmed today, we keep watching for 60 days and message you when a store confirms it.</p>
           </motion.div>
         </motion.div>
       </div>

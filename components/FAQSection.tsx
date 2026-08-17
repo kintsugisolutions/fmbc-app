@@ -9,7 +9,7 @@ const FAQS = [
   },
   {
     q: 'What if nothing is available?',
-    a: 'You are automatically added to the watchlist for that SKU. When any store in your area confirms it is in stock, you receive a WhatsApp alert. No need to search again. We track it for you.'
+    a: 'You go on the watchlist for that SKU in your area. For the next 60 days, the moment any verified store in your area confirms it is in stock, you receive one WhatsApp. One message per search - we do not send reminders or follow-ups, and if nothing is ever confirmed you will not hear from us at all.'
   },
   {
     q: 'How much does this cost?',

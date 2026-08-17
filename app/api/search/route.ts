@@ -4,6 +4,7 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { getVenuesForArea, findMatchingProduct, createUserSearch, createVenueQuery } from '@/lib/search-loop'
 import { sendWhatsAppTemplate } from '@/lib/interakt'
+import { createWatchlistEntry } from '@/lib/watchlist'
 
 // ─── Rate limiter (Upstash Redis — persistent across Vercel cold starts) ──────
 // Sliding window: 5 requests per IP per 10 minutes.
@@ -187,13 +188,22 @@ async function notifyVenues(input: {
     // No matching stores right now — still log the search (Status: "Not Found")
     // so it shows up in demand-intelligence reporting as unmet demand, per
     // FMBC's core thesis that the search data itself is the asset.
-    await createUserSearch({
+    const notFoundSearchId = await createUserSearch({
       phone: input.phone,
       product: input.product,
       searchType: searchTypeLabel,
       area: input.area,
       status: 'Not Found',
       matchedProductId,
+    })
+    // No store to ask right now, so this search can only ever be answered
+    // later - which is exactly what the watchlist is for.
+    await createWatchlistEntry({
+      phone: input.phone,
+      product: input.product,
+      area: input.area,
+      productId: matchedProductId,
+      userSearchId: notFoundSearchId,
     })
     // Still a success from the user's point of view — the search was received,
     // it just didn't match an active venue in that area right now.
@@ -207,6 +217,17 @@ async function notifyVenues(input: {
     area: input.area,
     status: 'Queries Sent',
     matchedProductId,
+  })
+
+  // Standing interest, in case no venue confirms today. If one does, the
+  // webhook resolves this row rather than double-messaging the same person
+  // (see resolveWatchlistForSearch in lib/watchlist.ts).
+  await createWatchlistEntry({
+    phone: input.phone,
+    product: input.product,
+    area: input.area,
+    productId: matchedProductId,
+    userSearchId,
   })
 
   // Send to each matched venue. Failures are logged per-venue and don't abort

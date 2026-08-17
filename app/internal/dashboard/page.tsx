@@ -26,6 +26,63 @@ function topCounts(values: (string | null)[], limit = 8) {
   return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit)
 }
 
+// Phone numbers are the most sensitive thing in this database. The dashboard
+// never needs the full number to do its job, so show only the last 4 digits —
+// enough to correlate a row with a WhatsApp thread if you're debugging, not
+// enough to leak a contact list from a screenshot.
+function maskPhone(phone: string | null): string {
+  if (!phone) return '—'
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length < 4) return '—'
+  return `••••${digits.slice(-4)}`
+}
+
+interface WatchlistRow {
+  id: string
+  user_phone: string
+  raw_search_text: string
+  normalized_key: string
+  area: string
+  status: string
+  created_at: string
+}
+
+interface WatchCluster {
+  key: string
+  waiting: number // distinct people
+  variants: string[] // the raw strings people actually typed
+  areas: [string, number][]
+  latest: string
+}
+
+// Groups Active watchers by normalised SKU key — the same key the review queue
+// uses, so phrasing variants collapse into one cohort. This table is the
+// distributor/store pitch in raw form: "N people in <area> are waiting on X".
+function clusterWatchlist(rows: WatchlistRow[]): WatchCluster[] {
+  const map = new Map<string, { phones: Set<string>; variants: Set<string>; areas: Map<string, number>; latest: string }>()
+
+  for (const r of rows) {
+    if (r.status !== 'Active') continue
+    const existing = map.get(r.normalized_key)
+    const entry = existing ?? { phones: new Set<string>(), variants: new Set<string>(), areas: new Map<string, number>(), latest: r.created_at }
+    entry.phones.add(r.user_phone)
+    entry.variants.add(r.raw_search_text)
+    entry.areas.set(r.area, (entry.areas.get(r.area) ?? 0) + 1)
+    if (new Date(r.created_at).getTime() > new Date(entry.latest).getTime()) entry.latest = r.created_at
+    if (!existing) map.set(r.normalized_key, entry)
+  }
+
+  return Array.from(map.entries())
+    .map(([key, v]) => ({
+      key,
+      waiting: v.phones.size,
+      variants: Array.from(v.variants),
+      areas: Array.from(v.areas.entries()).sort((a, b) => b[1] - a[1]),
+      latest: v.latest,
+    }))
+    .sort((a, b) => b.waiting - a.waiting)
+}
+
 export default async function InternalDashboardPage() {
   const supabase = createAdminClient()
 
@@ -37,6 +94,7 @@ export default async function InternalDashboardPage() {
     { data: checkpoint },
     { data: pageViews },
     { data: recentRuns },
+    { data: watchlistRaw },
   ] = await Promise.all([
     supabase.from('user_searches').select('id, area, created_at, status'),
     supabase.from('venue_queries').select('id, status, sent_at, replied_at'),
@@ -59,12 +117,18 @@ export default async function InternalDashboardPage() {
       .select('id, path, country, region, city, referrer, created_at')
       .order('created_at', { ascending: false })
       .limit(2000),
-    supabase.from('review_runs').select('run_at, total_unreviewed, new_since_last_run').order('run_at', { ascending: false }).limit(5),
+    supabase.from('review_runs').select('run_at, total_unreviewed, new_since_last_run, notes').order('run_at', { ascending: false }).limit(5),
+    supabase
+      .from('watchlists')
+      .select('id, user_phone, raw_search_text, normalized_key, area, status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(2000),
   ])
 
   const searches = allSearches ?? []
   const vq = venueQueries ?? []
   const pv = pageViews ?? []
+  const watchlist = (watchlistRaw ?? []) as WatchlistRow[]
 
   const searchToday = countSince(searches, daysAgoIso(1))
   const search7d = countSince(searches, daysAgoIso(7))
@@ -89,6 +153,11 @@ export default async function InternalDashboardPage() {
   const since = checkpoint?.last_reviewed_queue_view_at ?? null
   const groups = groupForReview(unreviewed, since)
   const newGroupCount = groups.filter((g) => g.isNew).length
+
+  const activeWatchers = watchlist.filter((w) => w.status === 'Active')
+  const notifiedWatchers = watchlist.filter((w) => w.status === 'Notified')
+  const expiredWatchers = watchlist.filter((w) => w.status === 'Expired')
+  const watchClusters = clusterWatchlist(watchlist)
 
   return (
     <div style={styles.page}>
@@ -118,6 +187,80 @@ export default async function InternalDashboardPage() {
           This is the fragile core of the loop — watch for sustained drops. Low response rate usually means
           template fatigue, wrong number formatting, or a store gone inactive, not a product problem.
         </p>
+      </Section>
+
+      <Section title={`Unmet demand — ${activeWatchers.length} people waiting across ${watchClusters.length} SKU${watchClusters.length === 1 ? '' : 's'}`}>
+        <div style={styles.kpiRow}>
+          <Kpi label="Active" value={activeWatchers.length} />
+          <Kpi label="Notified" value={notifiedWatchers.length} />
+          <Kpi label="Expired" value={expiredWatchers.length} />
+        </div>
+        <p style={styles.hint}>
+          Everyone whose search wasn&apos;t confirmed is waiting here until a store confirms that SKU
+          (or 60 days pass). Grouped by the same normalised key the review queue uses, so
+          &quot;Jack Daniels&quot; and &quot;jack daniel&apos;s 750ml&quot; count as one cohort.
+          <strong> This table is the store and distributor pitch in raw form</strong> — a row saying
+          8 people in Model Town are waiting on a SKU is demand that store is currently missing.
+        </p>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>SKU (normalised)</th>
+              <th style={styles.th}>People waiting</th>
+              <th style={styles.th}>Areas</th>
+              <th style={styles.th}>As typed</th>
+              <th style={styles.th}>Latest</th>
+            </tr>
+          </thead>
+          <tbody>
+            {watchClusters.slice(0, 25).map((c) => (
+              <tr key={c.key}>
+                <td style={styles.td}><strong>{c.key}</strong></td>
+                <td style={styles.td}>{c.waiting}</td>
+                <td style={styles.td}>{c.areas.map(([a, n]) => `${a} (${n})`).join(', ')}</td>
+                <td style={{ ...styles.td, color: '#9a9587' }}>{c.variants.join(' · ')}</td>
+                <td style={styles.td}>{new Date(c.latest).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {watchClusters.length === 0 && (
+          <p style={styles.hint}>Nobody waiting yet — this fills up as searches come in without a confirmation.</p>
+        )}
+      </Section>
+
+      <Section title="Watchlist inputs — raw, for review">
+        <p style={styles.hint}>
+          The exact text each person typed, newest first. Same exploit surface as the review queue:
+          this is unvalidated user input, so scan it for junk or abuse. Nothing here is ever published
+          to the catalog — approving a SKU still happens only in the review queue below. Phone numbers
+          are masked to the last 4 digits on purpose.
+        </p>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>As typed</th>
+              <th style={styles.th}>Normalised to</th>
+              <th style={styles.th}>Area</th>
+              <th style={styles.th}>Phone</th>
+              <th style={styles.th}>Status</th>
+              <th style={styles.th}>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {watchlist.slice(0, 40).map((w) => (
+              <tr key={w.id}>
+                <td style={styles.td}>{w.raw_search_text}</td>
+                <td style={{ ...styles.td, color: '#9a9587' }}>{w.normalized_key}</td>
+                <td style={styles.td}>{w.area}</td>
+                <td style={styles.td}>{maskPhone(w.user_phone)}</td>
+                <td style={styles.td}>{w.status}</td>
+                <td style={styles.td}>{new Date(w.created_at).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {watchlist.length === 0 && <p style={styles.hint}>No watchlist entries yet.</p>}
       </Section>
 
       <Section title="Site traffic">
@@ -232,13 +375,14 @@ export default async function InternalDashboardPage() {
         ))}
       </Section>
 
-      <Section title="Recent nightly review runs (log only)">
+      <Section title="Recent nightly runs">
         <table style={styles.table}>
           <thead>
             <tr>
               <th style={styles.th}>Run at</th>
               <th style={styles.th}>Total unreviewed</th>
               <th style={styles.th}>New since last run</th>
+              <th style={styles.th}>Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -247,6 +391,7 @@ export default async function InternalDashboardPage() {
                 <td style={styles.td}>{new Date(r.run_at).toLocaleString()}</td>
                 <td style={styles.td}>{r.total_unreviewed}</td>
                 <td style={styles.td}>{r.new_since_last_run}</td>
+                <td style={{ ...styles.td, color: '#9a9587' }}>{r.notes}</td>
               </tr>
             ))}
           </tbody>
@@ -313,7 +458,7 @@ const styles: Record<string, React.CSSProperties> = {
   miniTableRow: { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', borderBottom: '1px solid #1e1f19', width: 200 },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 8 },
   th: { textAlign: 'left', borderBottom: '1px solid #33342b', padding: '6px 8px', color: '#9a9587', fontWeight: 500, fontSize: 11, textTransform: 'uppercase' },
-  td: { borderBottom: '1px solid #1e1f19', padding: '6px 8px' },
+  td: { borderBottom: '1px solid #1e1f19', padding: '6px 8px', verticalAlign: 'top' },
   reviewGroup: { background: '#1c1d18', border: '1px solid #33342b', borderRadius: 6, padding: 16, marginBottom: 16 },
   reviewGroupHeader: { marginBottom: 4, fontSize: 14 },
   newBadge: { background: '#c9a24b', color: '#12130f', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, marginRight: 8, letterSpacing: 0.5 },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyInteraktSignature, sendWhatsAppTemplate } from '@/lib/interakt'
 import { classifyVenueReply } from '@/lib/reply-classifier'
+import { notifyWatchersForConfirmation, resolveWatchlistForSearch } from '@/lib/watchlist'
 import {
   findPendingQueryByVenuePhone,
   recordVenueReply,
@@ -32,6 +33,9 @@ import {
 // stack yet. Revisit if/when search volume grows enough that this margin
 // gets tight; the fix would be acknowledging immediately and processing via
 // a queue (e.g. Vercel's waitUntil, or a real queue if volume justifies it).
+// The watchlist fan-out below is the main thing that grows this budget — it
+// is capped at MAX_NOTIFY_PER_EVENT (see lib/watchlist.ts) partly for that
+// reason.
 
 const CONFIRM_TEMPLATE_NAME = process.env.INTERAKT_CONFIRM_TEMPLATE_NAME || 'product_confirmed'
 
@@ -130,6 +134,28 @@ async function handleIncomingMessage(payload: any) {
     await upsertAvailability({ venueId: context.venueId, productId: context.productId })
   }
 
+  // ── Watchlist fan-out ──────────────────────────────────────────────────
+  // Everyone else waiting on this SKU in a matching area hears about it now.
+  // This runs regardless of who "wins" the confirmation for this particular
+  // search below — a confirmation is news to every waiting watcher, not just
+  // the person whose search happened to trigger it. The searcher who owns
+  // THIS search is excluded here and resolved separately once their own
+  // confirmation message actually sends, so nobody gets two messages.
+  const notified = await notifyWatchersForConfirmation({
+    productId: context.productId,
+    productName: context.productName,
+    rawSearchText: context.rawSearchText,
+    venueId: context.venueId,
+    venueName: context.venueName,
+    excludeUserSearchId: context.userSearchId,
+  })
+  if (notified > 0) {
+    console.log(
+      `Watchlist: notified ${notified} waiting user(s) that ` +
+      `${context.productName ?? context.rawSearchText} is confirmed at ${context.venueName}`
+    )
+  }
+
   // First venue to confirm "Available" wins the notification to the
   // searcher — claimUserSearchConfirmation is a conditional update so
   // concurrent replies from multiple venues can't double-notify the same
@@ -154,5 +180,11 @@ async function handleIncomingMessage(payload: any) {
   ])
   if (!result.success) {
     console.error(`Failed to notify searcher for user_search ${context.userSearchId}:`, result.error)
+    return
   }
+
+  // Their own standing watchlist row is now answered. Resolved only after the
+  // send actually succeeded — marking it Notified on a failed send would mean
+  // silently dropping them from a future fan-out that could still reach them.
+  await resolveWatchlistForSearch(context.userSearchId, context.venueId)
 }
