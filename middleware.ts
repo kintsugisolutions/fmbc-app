@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { isValidSessionCookie, COOKIE_NAME } from '@/lib/internal-auth'
 
 // ─── Nonce-based Content Security Policy ──────────────────────────────────────
 // Generates a cryptographically random nonce per request and injects it into:
@@ -15,7 +16,23 @@ import type { NextRequest } from 'next/server'
 // styles to remove it without a dedicated style nonce pass (future work).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── /internal auth gate ────────────────────────────────────────────────────
+// Everything under /internal (the private usage/traffic dashboard + review
+// queue) requires a valid session cookie, set only after the passphrase form
+// at /internal/login succeeds. Added 2026-08-17 — see app/internal/.
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  if (pathname.startsWith('/internal') && pathname !== '/internal/login') {
+    const session = request.cookies.get(COOKIE_NAME)?.value
+    if (!isValidSessionCookie(session)) {
+      const loginUrl = new URL('/internal/login', request.url)
+      return NextResponse.redirect(loginUrl)
+    }
+  }
+
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
   const isDev = process.env.NODE_ENV === 'development'
 

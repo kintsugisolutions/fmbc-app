@@ -7,6 +7,7 @@ import DepthField from '@/components/DepthField'
 import SearchPin from '@/components/SearchPin'
 import GateRevealSweep from '@/components/GateRevealSweep'
 import IosInstallPrompt from '@/components/IosInstallPrompt'
+import PageViewTracker from '@/components/PageViewTracker'
 import './globals.css'
 
 // ── Display typeface — self-hosted via next/font (no external requests at runtime,
@@ -149,6 +150,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* iOS Safari "Add to Home Screen" prompt — shows once, after age verification */}
         <IosInstallPrompt />
+
+        {/* Pageview + coarse-location traffic beacon — skips /internal, no cookies/storage */}
+        <PageViewTracker />
 
         {/* JSON-LD structured data — static object only, no user input */}
         <script
